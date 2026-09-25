@@ -1,0 +1,13 @@
+Period,Subregion,N,GFS MAE (mm),ECMWF MAE (mm),50/50 MAE (mm),Adaptive M7 MAE (mm)
+June 2024,Coastal Andhra Pradesh,4080,9.5705,8.4355,8.4606,8.3354
+June 2024,Rayalaseema,6720,5.2701,5.5324,4.9965,4.9045
+June 2024,Telangana,10230,6.8844,7.9625,6.9215,7.0467
+July 2024,Coastal Andhra Pradesh,4216,12.0522,13.3872,11.6805,11.9058
+July 2024,Rayalaseema,6944,3.3331,3.813,3.3578,3.3424
+July 2024,Telangana,10571,9.0397,9.7258,8.7329,8.832
+August 2024,Coastal Andhra Pradesh,4216,9.2335,10.1635,9.0899,9.2181
+August 2024,Rayalaseema,6944,5.6259,6.7812,5.9423,6.0252
+August 2024,Telangana,10571,8.2928,8.3108,7.8783,7.8763
+Full Season (Jun-Aug),Coastal Andhra Pradesh,12512,10.2932,10.6863,9.7576,9.8359
+Full Season (Jun-Aug),Rayalaseema,20608,4.7373,5.3739,4.763,4.7558
+Full Season (Jun-Aug),Telangana,31372,8.0852,8.674,7.8543,7.9278

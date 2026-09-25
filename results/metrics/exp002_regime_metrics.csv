@@ -1,0 +1,8 @@
+Regime,N,GFS MAE,ECMWF MAE,Ensemble MAE
+Dry (<0.1mm),10465,3.4369,4.4433,3.9401
+Light (0.1-5mm),6875,5.5039,6.3703,5.6342
+Moderate (5-15mm),3555,8.5386,7.3808,6.7368
+Heavy (>=15mm),2835,22.1535,19.6486,19.1823
+Subregion: Coastal Andhra Pradesh,4080,9.5705,8.4355,8.4606
+Subregion: Rayalaseema,6720,5.2701,5.5324,4.9965
+Subregion: Telangana,10230,6.8844,7.9625,6.9215

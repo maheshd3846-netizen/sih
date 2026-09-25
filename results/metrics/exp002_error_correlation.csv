@@ -1,0 +1,7 @@
+Metric,Value
+Pearson Error Correlation,0.5532
+Spearman Error Correlation,0.4835
+Error Covariance,90.4976
+GFS Closer (>0.5mm),11300 (47.62%)
+ECMWF Closer (>0.5mm),8520 (35.90%)
+Similarly Close (<=0.5mm),3910 (16.48%)

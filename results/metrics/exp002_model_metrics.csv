@@ -1,0 +1,4 @@
+Model,N,MAE (mm),RMSE (mm),Mean Bias (mm),Pearson Correlation,Spearman Correlation,Zero-Rain Freq (%),Dry-Event MAE (<0.1mm),Rainy-Event MAE (>=0.1mm),Mod-Heavy MAE (>=5mm),Heavy Rain MAE (>=15mm),95th Pct Abs Error (mm),99th Pct Abs Error (mm)
+NOAA GFS,23730,7.0361,13.7222,0.8948,0.2601,0.4094,9.06,3.4369,9.8755,14.579,22.1535,29.0764,58.2081
+ECMWF IFS,23730,7.2582,12.0952,1.8968,0.3093,0.3985,1.62,4.4433,9.4789,12.8235,19.6486,24.9432,45.2943
+50/50 Ensemble,23730,6.6709,11.3905,1.3958,0.3481,0.4556,0.75,3.9401,8.8252,12.2584,19.1823,23.7093,45.2913

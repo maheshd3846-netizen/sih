@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIH26081 — Multi-Model Rainfall Forecast &amp; Confidence Engine</title>
+  <meta name="description" content="Operational NWP precipitation fusion combining NOAA GFS and ECMWF IFS with calibrated disagreement-based confidence and retrospective IMD verification.">
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Meteorological Design System CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- ========================================================
+         SINGLE COMPACT OPERATIONAL COMMAND HEADER
+         Combines identity, date controller, subregion, cycle & nav
+         ======================================================== -->
+    <header class="app-command-header" role="banner">
+      <!-- 1. System Brand & Core Identity -->
+      <div class="header-brand-block">
+        <div class="brand-id-badge">
+          <span class="brand-pulse">●</span>
+          <span class="brand-code">SIH26081</span>
+        </div>
+        <div class="brand-titles">
+          <h1 class="brand-main-title">PRECIPITATION FUSION</h1>
+          <span class="brand-sub-title">Multi-Model Forecast &amp; Confidence Engine</span>
+        </div>
+      </div>
+
+      <!-- 2. Operational Date Scrubber & Cycle -->
+      <div class="header-control-cluster">
+        <div class="op-date-control">
+          <button class="btn-step-day" id="btn-prev-day" title="Previous Operational Day (◀)" aria-label="Previous Day">◀</button>
+          <div class="date-display-box" title="Click to select forecast date">
+            <span class="date-label-mono" id="header-date-text">15 JUL 2024</span>
+            <input type="date" id="date-picker" min="2024-06-01" max="2024-08-31" value="2024-07-15" aria-label="Select forecast date">
+          </div>
+          <button class="btn-step-day" id="btn-next-day" title="Next Operational Day (▶)" aria-label="Next Day">▶</button>
+        </div>
+
+        <!-- Operational Cycle Metadata -->
+        <div class="op-cycle-pill" title="NWP Forecast Run & Causal Observation Lag">
+          <span class="cycle-clock">00 UTC</span>
+          <span class="cycle-sep">/</span>
+          <span class="cycle-lead">+24h Lead</span>
+          <span class="cycle-tag">Causal T-1</span>
+        </div>
+
+        <!-- Subregion Filter Segmented Group -->
+        <div class="header-region-selector" role="group" aria-label="Subregion selection">
+          <button class="region-btn active" data-region="All" title="Complete Domain (791 Cells)">All (791)</button>
+          <button class="region-btn" data-region="Coastal Andhra Pradesh" title="Coastal Andhra Pradesh (136 Cells)">Coastal AP (136)</button>
+          <button class="region-btn" data-region="Rayalaseema" title="Rayalaseema (224 Cells)">Rayalaseema (224)</button>
+          <button class="region-btn" data-region="Telangana" title="Telangana (341 Cells)">Telangana (341)</button>
+        </div>
+      </div>
+
+      <!-- 3. Navigation Views & System Status -->
+      <div class="header-nav-cluster">
+        <nav class="primary-nav-tabs" aria-label="Workstation Navigation">
+          <button class="nav-tab active" data-view="forecast" id="tab-forecast">
+            <span class="tab-label">Forecast</span>
+          </button>
+          <button class="nav-tab" data-view="verification" id="tab-verification">
+            <span class="tab-label">Verification</span>
+          </button>
+          <button class="nav-tab" data-view="methodology" id="tab-methodology">
+            <span class="tab-label">Methodology</span>
+          </button>
+          <button class="nav-tab" data-view="about" id="tab-about">
+            <span class="tab-label">About</span>
+          </button>
+        </nav>
+
+        <button class="btn-tour-pill" id="btn-start-demo" title="Start Guided Technical Tour for SIH Judges">
+          <span class="tour-icon">🎯</span>
+          <span class="tour-text">Demo Tour</span>
+        </button>
+
+        <div class="system-health-badge" id="system-status-indicator" title="Backend Operational Status">
+          <span class="health-pulse"></span>
+          <span class="health-text" id="system-status-text">SYSTEM ONLINE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main dynamic workspace -->
+    <main class="workstation-viewport">
+      
+      <!-- ========================================================
+           VIEW 1: PRIMARY METEOROLOGICAL FORECAST WORKSTATION
+           ======================================================== -->
+      <section class="view-panel active" id="view-forecast">
+        <div class="forecast-grid-workspace">
+          
+          <!-- LEFT / DOMINANT: GEOSPATIAL MAP VIEWPORT (72% Width) -->
+          <div class="map-viewport-container">
+            
+            <!-- Grouped Meteorological Layer Toolbar (Floating) -->
+            <!-- Grouped Meteorological Layer Toolbar (Floating) -->
+            <div class="floating-layer-toolbar" role="toolbar" aria-label="Map Layer Selection">
+              
+              <!-- Group 0: VIEW DIMENSION SELECTOR (Section 4 & 18) -->
+              <div class="layer-btn-group group-dimension">
+                <span class="layer-group-label">VIEW</span>
+                <div class="group-pills">
+                  <button class="layer-tab active" data-dimension="2d" id="btn-view-2d" title="Operational 2D Meteorological Grid Map">
+                    <span class="layer-bullet bullet-2d"></span>
+                    <span>2D MAP</span>
+                  </button>
+                  <button class="layer-tab" data-dimension="3d" id="btn-view-3d" title="3D Analytical Precipitation & Spread Workstation">
+                    <span class="layer-bullet bullet-3d"></span>
+                    <span>3D PRECIPITATION</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 2D SPECIFIC GROUPS (Shown when 2D MAP is active) -->
+              <div class="toolbar-mode-cluster" id="cluster-2d-layers">
+                <!-- Group 1: FORECAST (What models predict) -->
+                <div class="layer-btn-group group-forecast">
+                  <span class="layer-group-label">FORECAST</span>
+                  <div class="group-pills">
+                    <button class="layer-tab active" data-layer="fused" id="layer-btn-fused" title="50/50 Equal-Weight Ensemble Forecast">
+                      <span class="layer-bullet bullet-fused"></span>
+                      <span>50/50 Fused</span>
+                    </button>
+                    <button class="layer-tab" data-layer="gfs" id="layer-btn-gfs" title="NOAA Global Forecast System (0.25° APCP)">
+                      <span class="layer-bullet bullet-gfs"></span>
+                      <span>NOAA GFS</span>
+                    </button>
+                    <button class="layer-tab" data-layer="ecmwf" id="layer-btn-ecmwf" title="ECMWF Integrated Forecasting System (0.25° tp)">
+                      <span class="layer-bullet bullet-ecmwf"></span>
+                      <span>ECMWF IFS</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Group 2: ANALYSIS (How much they agree / confidence) -->
+                <div class="layer-btn-group group-analysis">
+                  <span class="layer-group-label">ANALYSIS</span>
+                  <div class="group-pills">
+                    <button class="layer-tab" data-layer="confidence" id="layer-btn-confidence" title="Empirical Disagreement Confidence Classes">
+                      <span class="layer-bullet bullet-conf"></span>
+                      <span>Confidence</span>
+                    </button>
+                    <button class="layer-tab" data-layer="disagreement" id="layer-btn-disagreement" title="Model Disagreement D = |GFS - ECMWF|">
+                      <span class="layer-bullet bullet-dis"></span>
+                      <span>Disagreement (D)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Group 3: VERIFICATION (Retrospective observation comparison) -->
+                <div class="layer-btn-group group-verification">
+                  <span class="layer-group-label">VERIFICATION</span>
+                  <div class="group-pills">
+                    <button class="layer-tab" data-layer="imd" id="layer-btn-imd" title="IMD 0.25° Gridded Rainfall Observation Audit">
+                      <span class="layer-bullet bullet-imd"></span>
+                      <span>IMD Retrospective</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3D SPECIFIC GROUPS (Shown when 3D PRECIPITATION is active) -->
+              <div class="toolbar-mode-cluster hidden" id="cluster-3d-layers">
+                <!-- Group 3D-A: 3D VARIABLE -->
+                <div class="layer-btn-group group-3d-var">
+                  <span class="layer-group-label">3D VARIABLE</span>
+                  <div class="group-pills">
+                    <button class="layer-tab active" data-3dmode="rain" id="btn-3d-rain" title="Vertical Height = P_fused (Forecast rainfall mm / 24h)">
+                      <span class="layer-bullet bullet-3d-rain"></span>
+                      <span>RAIN</span>
+                    </button>
+                    <button class="layer-tab" data-3dmode="disagreement" id="btn-3d-disagreement" title="Vertical Height = Model Disagreement D = |GFS - ECMWF| (mm)">
+                      <span class="layer-bullet bullet-3d-dis"></span>
+                      <span>DISAGREEMENT</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Group 3D-B: ANALYTICAL OVERLAY -->
+                <div class="layer-btn-group group-3d-overlay">
+                  <span class="layer-group-label">ANALYTICAL OVERLAY</span>
+                  <div class="group-pills">
+                    <button class="layer-tab toggle-tab" id="btn-3d-low-conf" title="Highlight Low-Confidence Area (D ≥ 2.06 mm)">
+                      <span class="layer-bullet bullet-warn"></span>
+                      <span>Low-Confidence Area (D &ge; 2.06 mm)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Group 3D-C: CAMERA -->
+                <div class="layer-btn-group group-3d-cam">
+                  <span class="layer-group-label">CAMERA</span>
+                  <div class="group-pills">
+                    <button class="layer-tab btn-reset-camera" id="btn-reset-3d-cam" title="Reset 3D Oblique Workstation Camera">
+                      <span>↺ Reset 3D View</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Prominent IMD Verification Mode Banner (shown only when IMD layer active) -->
+            <div class="imd-mode-banner hidden" id="imd-mode-banner" role="status">
+              <span class="banner-live-dot"></span>
+              <span class="banner-title-text">IMD RETROSPECTIVE VERIFICATION</span>
+              <span class="banner-sep">•</span>
+              <span class="banner-detail-text">HISTORICAL OBSERVATION</span>
+            </div>
+
+            <!-- Leaflet Map Canvas (2D) -->
+            <div id="map" class="leaflet-map-canvas" aria-label="Precipitation Forecast Grid Map"></div>
+
+            <!-- Three.js WebGL Canvas Container (3D Analytical Layer) -->
+            <div id="three-container" class="three-viewport-canvas hidden" aria-label="3D Precipitation Analysis Viewport">
+              
+              <!-- Elevation & Display Scaling Notice (Section 4 & 8) -->
+              <div class="three-scaling-notice" id="three-scaling-notice">
+                <span class="notice-icon">📐</span>
+                <span class="notice-main" id="three-variable-note">Height represents forecast rainfall, not terrain elevation.</span>
+                <span class="notice-sep">•</span>
+                <span class="notice-sub">Vertical scaling is a visualization transform only; forecast values remain unchanged.</span>
+              </div>
+
+              <!-- Lightweight Hover Tooltip (Section 13) -->
+              <div id="three-hover-tooltip" class="three-hover-tooltip hidden" aria-live="polite"></div>
+
+              <!-- Fallback card if WebGL unsupported (Section 22) -->
+              <div id="webgl-fallback" class="webgl-fallback-card hidden">
+                <div class="fallback-icon">⚠️</div>
+                <div class="fallback-title">3D visualization unavailable in this browser.</div>
+                <div class="fallback-sub">Switch to 2D Map.</div>
+                <button class="btn-fallback-2d" id="btn-fallback-switch">Switch to 2D Map</button>
+              </div>
+
+              <!-- 3D HUD / Geographic Orientation Compass -->
+              <div class="three-hud-compass">
+                <div class="compass-label">ORIENTATION</div>
+                <div class="compass-grid">
+                  <span class="c-point c-n">▲ N (20°N)</span>
+                  <div class="c-mid">
+                    <span class="c-point c-w">◄ W (76°E)</span>
+                    <span class="c-core">AP &amp; TG</span>
+                    <span class="c-point c-e">E (85°E) ►</span>
+                  </div>
+                  <span class="c-point c-s">▼ S (12°N)</span>
+                </div>
+                <div class="compass-nav-hint">Left Drag: Orbit &bull; Right Drag: Pan &bull; Wheel: Zoom</div>
+              </div>
+            </div>
+
+            <!-- Floating Meteorological Legend (Bottom Left) -->
+            <div class="map-floating-legend" id="map-legend" aria-label="Map Layer Legend">
+              <!-- Populated dynamically by app.js -->
+            </div>
+
+            <!-- Map View Utility Buttons (Top Right) -->
+            <div class="map-view-utilities">
+              <button class="btn-map-util" id="btn-basemap-toggle" title="Toggle Light / Dark Basemap">
+                🌓 Basemap
+              </button>
+              <button class="btn-map-util" id="btn-grid-toggle" title="Toggle 0.25° Grid Lines">
+                ⊞ Grid Lines
+              </button>
+            </div>
+
+            <!-- Map Geographic Provenance Bar -->
+            <div class="map-provenance-bar">
+              <span>Andhra Pradesh &amp; Telangana Domain (12°–20°N, 76°–85°E) • 791 Terrestrial Cells • 0.25° Resolution</span>
+            </div>
+
+            <!-- Integrated Timeline Scrubber Bar (Docked at Bottom of Map) -->
+            <div class="map-timeline-dock">
+              <div class="timeline-controls-row">
+                <button class="btn-timeline-play" id="btn-play-pause" title="Play / Pause 92-Day Monsoon Timeline">
+                  <span id="play-icon">▶</span>
+                  <span id="play-text">Play</span>
+                </button>
+                <div class="timeline-current-date-badge" id="timeline-date-display">
+                  15 JUL 2024
+                </div>
+                <div class="timeline-slider-track">
+                  <input type="range" id="timeline-slider" min="0" max="91" value="44" step="1" aria-label="Monsoon Timeline Day Slider">
+                  <div class="timeline-season-markers">
+                    <span class="season-mark start">JUN 01</span>
+                    <span class="season-mark mid">JUL 15</span>
+                    <span class="season-mark end">AUG 31</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT: METEOROLOGICAL ANALYSIS & INSPECTOR PANEL (28% Width) -->
+          <aside class="analysis-panel-container" aria-label="Forecast Analysis and Cell Inspector">
+            
+            <!-- STATE A: OPERATIONAL DOMAIN SUMMARY (Default view) -->
+            <div class="panel-state-card" id="panel-domain-summary">
+              
+              <!-- Panel Header -->
+              <div class="op-panel-header">
+                <div class="header-titles">
+                  <span class="panel-kicker">OPERATIONAL OVERVIEW</span>
+                  <h2 class="panel-headline" id="summary-region-label">AP &amp; Telangana Domain</h2>
+                </div>
+                <span class="panel-date-badge" id="summary-date-badge">15 JUL 2024</span>
+              </div>
+
+              <!-- Primary Forecast & Consensus Metrics -->
+              <div class="summary-key-metrics">
+                
+                <!-- Main Forecast Card -->
+                <div class="metric-card metric-primary">
+                  <span class="m-kicker">24-HOUR DOMAIN MEAN</span>
+                  <div class="m-hero-val">
+                    <span class="val-num" id="val-domain-mean">--</span>
+                    <span class="val-unit">mm</span>
+                  </div>
+                  <div class="m-sub-detail">
+                    <span>Peak Cell: </span>
+                    <strong class="text-accent" id="val-domain-max">-- mm</strong>
+                    <span class="loc-sub" id="val-domain-max-loc">(Point)</span>
+                  </div>
+                </div>
+
+                <!-- Consensus & Disagreement -->
+                <div class="metric-card metric-consensus">
+                  <span class="m-kicker">MODEL DISAGREEMENT (D)</span>
+                  <div class="m-hero-val">
+                    <span class="val-num" id="val-domain-dis">--</span>
+                    <span class="val-unit">mm</span>
+                  </div>
+                  <div class="m-sub-detail">
+                    <span>Low-Confidence Area: </span>
+                    <strong id="val-domain-warn">--%</strong>
+                    <div style="font-size: 0.62rem; color: var(--text-muted); margin-top: 2px;">Based on model disagreement</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Compact Operational Fusion Pipeline -->
+              <div class="fusion-pipeline-box">
+                <div class="pipeline-header">
+                  <span class="pipeline-title">OPERATIONAL FUSION ARCHITECTURE</span>
+                  <span class="pipeline-tag">Equal-Weight Centroid</span>
+                </div>
+                
+                <div class="pipeline-diagram">
+                  <div class="pipe-col pipe-inputs">
+                    <div class="pipe-node node-gfs">
+                      <span class="node-src">NOAA GFS</span>
+                      <span class="node-val" id="summary-gfs-val">-- mm</span>
+                    </div>
+                    <div class="pipe-node node-ecmwf">
+                      <span class="node-src">ECMWF IFS</span>
+                      <span class="node-val" id="summary-ecmwf-val">-- mm</span>
+                    </div>
+                  </div>
+
+                  <div class="pipe-col pipe-arrows">
+                    <span class="pipe-arrow">↘</span>
+                    <span class="pipe-arrow">↗</span>
+                  </div>
+
+                  <div class="pipe-col pipe-fusion">
+                    <div class="pipe-node node-fused">
+                      <span class="node-src">50/50 FUSION</span>
+                      <span class="node-val" id="summary-fused-val">-- mm</span>
+                    </div>
+                    <div class="pipe-divergence">
+                      <span class="div-label">Disagreement (D)</span>
+                      <span class="div-val" id="summary-dis-val">-- mm</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Explainable Confidence Breakdown -->
+              <div class="confidence-summary-box">
+                <div class="conf-box-header">
+                  <span class="conf-box-title">EMPIRICAL CONFIDENCE REGIMES</span>
+                  <span class="conf-box-sub">72,772 Monsoon Calibration Samples</span>
+                </div>
+
+                <!-- Three Clean Regime Rows -->
+                <div class="regime-rows">
+                  <div class="regime-row row-high">
+                    <div class="regime-left">
+                      <span class="regime-dot dot-high"></span>
+                      <span class="regime-name">HIGH CONFIDENCE</span>
+                      <span class="regime-rule">(D &lt; 0.11 mm)</span>
+                    </div>
+                    <div class="regime-right">
+                      <span class="regime-pct" id="pct-high">--%</span>
+                      <span class="regime-mae">Hist. MAE: <strong>2.02 mm</strong></span>
+                    </div>
+                  </div>
+
+                  <div class="regime-row row-mod">
+                    <div class="regime-left">
+                      <span class="regime-dot dot-mod"></span>
+                      <span class="regime-name">MODERATE CONFIDENCE</span>
+                      <span class="regime-rule">(0.11 &le; D &lt; 2.06 mm)</span>
+                    </div>
+                    <div class="regime-right">
+                      <span class="regime-pct" id="pct-mod">--%</span>
+                      <span class="regime-mae">Hist. MAE: <strong>3.75 mm</strong></span>
+                    </div>
+                  </div>
+
+                  <div class="regime-row row-low">
+                    <div class="regime-left">
+                      <span class="regime-dot dot-low"></span>
+                      <span class="regime-name">LOW CONFIDENCE</span>
+                      <span class="regime-rule">(D &ge; 2.06 mm)</span>
+                    </div>
+                    <div class="regime-right">
+                      <span class="regime-pct" id="pct-low">--%</span>
+                      <span class="regime-mae">Hist. MAE: <strong>9.46 mm</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Stacked Distribution Bar -->
+                <div class="stacked-confidence-bar">
+                  <div class="conf-seg seg-high" id="bar-seg-high" style="width: 33%" title="High Confidence Area"></div>
+                  <div class="conf-seg seg-mod" id="bar-seg-mod" style="width: 33%" title="Moderate Confidence Area"></div>
+                  <div class="conf-seg seg-low" id="bar-seg-low" style="width: 34%" title="Low Confidence Area"></div>
+                </div>
+              </div>
+
+              <!-- Quick Demonstration Inspection Shortcuts -->
+              <div class="demo-shortcuts-box">
+                <span class="shortcuts-title">QUICK DEMONSTRATION SHORTCUTS:</span>
+                <div class="shortcuts-buttons">
+                  <button class="btn-inspect-shortcut" id="btn-inspect-highest-d">
+                    <span class="shortcut-icon">⚡</span>
+                    <span>Inspect Highest Disagreement Cell</span>
+                  </button>
+                  <button class="btn-inspect-shortcut" id="btn-inspect-peak-rain">
+                    <span class="shortcut-icon">🌧️</span>
+                    <span>Inspect Peak Rainfall Cell</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- User Interaction Guidance -->
+              <div class="interaction-hint">
+                <span class="hint-icon">ℹ</span>
+                <span>Click any point on the rainfall field to inspect cell-level NWP models, disagreement, and retrospective IMD verification.</span>
+              </div>
+
+            </div>
+
+            <!-- STATE B: SELECTED CELL INSPECTOR (Opened upon cell click) -->
+            <div class="panel-state-card hidden" id="panel-cell-inspector">
+              
+              <!-- Inspector Header -->
+              <div class="inspector-top-bar">
+                <div class="cell-identity">
+                  <span class="cell-subregion-tag" id="inspect-subregion">COASTAL ANDHRA PRADESH</span>
+                  <h2 class="cell-coords-display" id="inspect-coords">16.50°N · 80.50°E</h2>
+                  <span class="cell-date-sub" id="inspect-dates">Forecast: 15 Jul 2024 → Valid: 16 Jul 2024</span>
+                </div>
+                <button class="btn-close-inspector" id="btn-close-inspector" title="Return to Domain Overview" aria-label="Close Cell Inspector">✕</button>
+              </div>
+
+              <div class="inspector-scrollable-body">
+                
+                <!-- 1. PRIMARY FORECAST & CONFIDENCE HERO -->
+                <div class="inspect-hero-group">
+                  <div class="forecast-value-block">
+                    <span class="hero-kicker">24-HOUR ACCUMULATED RAINFALL</span>
+                    <div class="hero-reading">
+                      <span class="hero-number" id="inspect-fused-val">21.38</span>
+                      <span class="hero-unit">mm</span>
+                    </div>
+                    <div class="hero-tags">
+                      <span class="pill-fused-tag">50/50 FUSED FORECAST</span>
+                      <span class="pill-regime-tag" id="inspect-regime-tag">Moderate Rain</span>
+                    </div>
+                  </div>
+
+                  <!-- Confidence Banner -->
+                  <div class="confidence-status-banner" id="inspect-conf-banner">
+                    <div class="conf-banner-header">
+                      <span class="conf-status-icon" id="inspect-conf-icon">●</span>
+                      <div class="conf-status-titles">
+                        <strong class="conf-status-main" id="inspect-conf-title">LOW CONFIDENCE</strong>
+                        <span class="conf-status-sub" id="inspect-conf-sub">High Model Disagreement</span>
+                      </div>
+                    </div>
+                    <div class="conf-metric-specs">
+                      <div class="spec-col">
+                        <span class="spec-k">Model Disagreement (D):</span>
+                        <span class="spec-v" id="inspect-banner-d">6.25 mm</span>
+                      </div>
+                      <div class="spec-col">
+                        <span class="spec-k">Historical MAE in Regime:</span>
+                        <span class="spec-v" id="inspect-banner-mae">9.46 mm</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. CELL FUSION PIPELINE -->
+                <div class="inspect-pipeline-card">
+                  <span class="section-micro-label">FUSION &amp; CONFIDENCE FLOW</span>
+                  <div class="cell-pipeline-flow">
+                    <div class="flow-nwp-inputs">
+                      <div class="nwp-chip chip-gfs">
+                        <span class="chip-name">GFS</span>
+                        <span class="chip-val" id="inspect-gfs-val">18.25 mm</span>
+                      </div>
+                      <div class="nwp-chip chip-ecmwf">
+                        <span class="chip-name">ECMWF</span>
+                        <span class="chip-val" id="inspect-ecmwf-val">24.50 mm</span>
+                      </div>
+                    </div>
+                    <div class="flow-connector">
+                      <span class="flow-arrow">→</span>
+                    </div>
+                    <div class="flow-fused-target">
+                      <div class="nwp-chip chip-fused">
+                        <span class="chip-name">50/50 Centroid</span>
+                        <span class="chip-val" id="inspect-compare-fused">21.38 mm</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. MODEL COMPARISON VISUALIZATION (Clean horizontal range, no pin overlap) -->
+                <div class="inspect-comparison-card">
+                  <div class="comp-header">
+                    <span class="section-micro-label">NWP MODEL SPREAD COMPARISON (+24H)</span>
+                    <span class="comp-spread-badge" id="bar-diff-tag">Spread: 6.25 mm</span>
+                  </div>
+
+                  <!-- Horizontal Visual Range Bar -->
+                  <div class="range-bar-container">
+                    <div class="range-track">
+                      <!-- Markers -->
+                      <div class="marker-pin pin-gfs" id="pin-gfs" title="NOAA GFS"></div>
+                      <div class="marker-pin pin-fused" id="pin-fused" title="50/50 Fused"></div>
+                      <div class="marker-pin pin-ecmwf" id="pin-ecmwf" title="ECMWF IFS"></div>
+                    </div>
+                    <div class="range-axis-labels">
+                      <span id="pin-lbl-min">0 mm</span>
+                      <span id="pin-lbl-max">50 mm</span>
+                    </div>
+                  </div>
+
+                  <!-- Discrete Model Value Grid -->
+                  <div class="model-readings-grid">
+                    <div class="model-stat-box box-gfs">
+                      <span class="m-name">NOAA GFS</span>
+                      <span class="m-val" id="card-gfs-val">18.25 mm</span>
+                      <span class="m-meta">0.25° APCP</span>
+                    </div>
+                    <div class="model-stat-box box-ecmwf">
+                      <span class="m-name">ECMWF IFS</span>
+                      <span class="m-val" id="card-ecmwf-val">24.50 mm</span>
+                      <span class="m-meta">0.25° tp</span>
+                    </div>
+                    <div class="model-stat-box box-fused">
+                      <span class="m-name">50/50 FUSED</span>
+                      <span class="m-val" id="card-fused-val">21.38 mm</span>
+                      <span class="m-meta">Ensemble</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 4. WHY THIS CONFIDENCE? (Explainable Empirical Narrative) -->
+                <div class="why-confidence-card">
+                  <div class="why-card-head">
+                    <span class="why-icon">💡</span>
+                    <h3 class="why-title">Why This Confidence?</h3>
+                  </div>
+                  <div class="why-narrative-text" id="inspect-why-body">
+                    <!-- Populated by app.js -->
+                  </div>
+                </div>
+
+                <!-- 5. IMD RETROSPECTIVE VERIFICATION AUDIT -->
+                <div class="imd-audit-card" id="inspect-verification-section">
+                  <div class="imd-audit-head">
+                    <div class="audit-titles">
+                      <span class="section-micro-label">RETROSPECTIVE OBSERVATION</span>
+                      <h3 class="audit-headline">IMD Retrospective Verification</h3>
+                    </div>
+                    <span class="badge-causal-pill">Strictly Causal (T-1)</span>
+                  </div>
+
+                  <div class="audit-stats-grid">
+                    <div class="audit-stat-item">
+                      <span class="audit-k">IMD Retrospective Observation:</span>
+                      <span class="audit-v text-imd-purple" id="inspect-imd-val">-- mm</span>
+                    </div>
+                    <div class="audit-stat-item">
+                      <span class="audit-k">50/50 Fused Forecast:</span>
+                      <span class="audit-v" id="inspect-fused-compare-val">-- mm</span>
+                    </div>
+                    <div class="audit-stat-item">
+                      <span class="audit-k">Verification Error:</span>
+                      <span class="audit-v" id="inspect-imd-err">-- mm</span>
+                    </div>
+                  </div>
+
+                  <!-- Verification Status Badge -->
+                  <div class="audit-verification-status" id="inspect-verif-status-badge">
+                    <span class="verif-tag-icon">📊</span>
+                    <span class="verif-tag-text" id="inspect-verif-status-text">OVER-FORECAST</span>
+                  </div>
+
+                  <p class="audit-temporal-note">
+                    Observation window ends 08:30 IST. ~87.5% temporal overlap with 00–00 UTC forecast run. Strictly zero same-day leakage.
+                  </p>
+                </div>
+
+                <!-- 6. TECHNICAL METADATA (Collapsible Details) -->
+                <details class="tech-accordion-item" id="acc-tech-details">
+                  <summary class="accordion-header">
+                    <span>Technical Grid &amp; Calibration Metadata</span>
+                    <span class="acc-arrow">▼</span>
+                  </summary>
+                  <div class="accordion-content">
+                    <div class="metadata-grid">
+                      <div class="meta-row"><span class="mk">Grid Coordinate:</span><span class="mv" id="tech-cell-coords">--</span></div>
+                      <div class="meta-row"><span class="mk">Subregion:</span><span class="mv" id="tech-subregion">--</span></div>
+                      <div class="meta-row"><span class="mk">Disagreement (D):</span><span class="mv" id="tech-dis-raw">-- mm</span></div>
+                      <div class="meta-row"><span class="mk">Normalized D:</span><span class="mv" id="tech-dis-norm">--</span></div>
+                      <div class="meta-row"><span class="mk">Calibration Rule:</span><span class="mv" id="tech-threshold-rule">D &ge; 2.06 mm &rarr; Low Conf</span></div>
+                      <div class="meta-row"><span class="mk">Regime Category:</span><span class="mv" id="tech-regime">--</span></div>
+                      <div class="meta-row"><span class="mk">Ensemble Weights:</span><span class="mv">0.50 GFS + 0.50 ECMWF</span></div>
+                      <div class="meta-row"><span class="mk">Spatial Resolution:</span><span class="mv">0.25° (~27 km terrestrial)</span></div>
+                    </div>
+                  </div>
+                </details>
+
+                <!-- 7. PROVENANCE & RIGOR (Collapsible) -->
+                <details class="tech-accordion-item" id="acc-provenance">
+                  <summary class="accordion-header">
+                    <span>Scientific Provenance &amp; Data Integrity</span>
+                    <span class="acc-arrow">▼</span>
+                  </summary>
+                  <div class="accordion-content">
+                    <div class="metadata-grid">
+                      <div class="meta-row"><span class="mk">NWP Source 1:</span><span class="mv">NOAA GFS 0.25° GRIB2 (APCP 00 UTC)</span></div>
+                      <div class="meta-row"><span class="mk">NWP Source 2:</span><span class="mv">ECMWF IFS 0.25° GRIB2 (tp 00 UTC)</span></div>
+                      <div class="meta-row"><span class="mk">Verification Source:</span><span class="mv">IMD 0.25° Gridded Binary (Pune NCC)</span></div>
+                      <div class="meta-row"><span class="mk">Integrity Pledge:</span><span class="mv">100% Real Forecasts (Zero Synthetic Data)</span></div>
+                    </div>
+                  </div>
+                </details>
+
+              </div>
+            </div>
+
+          </aside>
+
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 2: MULTI-PERIOD SCIENTIFIC VERIFICATION
+           ======================================================== -->
+      <section class="view-panel" id="view-verification">
+        <div class="document-scroll-view">
+          
+          <div class="doc-header-banner">
+            <span class="doc-kicker">EMPIRICAL VERIFICATION EVIDENCE</span>
+            <h2 class="doc-title">Multi-Period Generalization &amp; Verification Dashboard</h2>
+            <p class="doc-desc">
+              Causal expanding-origin validation across the complete 2024 Southwest Monsoon (June 01 – August 31, 2024). Evaluated against 72,772 paired terrestrial IMD observations.
+            </p>
+          </div>
+
+          <!-- Statistical Scorecard -->
+          <div class="verif-scorecard-grid">
+            <div class="score-card highlight-green">
+              <span class="sc-label">50/50 FUSED MAE (SEASON-WIDE)</span>
+              <div class="sc-val-row">
+                <span class="sc-val">7.321</span>
+                <span class="sc-unit">mm</span>
+              </div>
+              <span class="sc-sub">Across June–August, tested adaptive fusion showed no robust MAE advantage (p = 0.016, Bootstrap)</span>
+            </div>
+            <div class="score-card">
+              <span class="sc-label">ADAPTIVE WEIGHTING BENCHMARK MAE</span>
+              <div class="sc-val-row">
+                <span class="sc-val">7.372</span>
+                <span class="sc-unit">mm</span>
+              </div>
+              <span class="sc-sub">Statistically inferior out-of-sample</span>
+            </div>
+            <div class="score-card highlight-blue">
+              <span class="sc-label">DISAGREEMENT–ERROR CORRELATION</span>
+              <div class="sc-val-row">
+                <span class="sc-val">r = 0.4915</span>
+              </div>
+              <span class="sc-sub">Strong linear link to forecast error</span>
+            </div>
+            <div class="score-card highlight-purple">
+              <span class="sc-label">SPEARMAN RANK CORRELATION</span>
+              <div class="sc-val-row">
+                <span class="sc-val">ρ = 0.5843</span>
+              </div>
+              <span class="sc-sub">Strict monotonic relationship for confidence</span>
+            </div>
+          </div>
+
+          <!-- Expanding-Origin Multi-Period Summary Table -->
+          <div class="doc-table-card">
+            <div class="table-card-head">
+              <h3 class="table-card-title">Expanding-Origin Multi-Period Performance Summary</h3>
+              <span class="table-card-sub">NOAA GFS vs. ECMWF IFS vs. 50/50 Static Ensemble vs. Adaptive Weighting</span>
+            </div>
+            <div class="table-scroll-wrap">
+              <table class="scientific-table" id="table-period-metrics">
+                <thead>
+                  <tr>
+                    <th>Evaluation Period</th>
+                    <th>Model</th>
+                    <th>Samples (N)</th>
+                    <th>MAE (mm)</th>
+                    <th>RMSE (mm)</th>
+                    <th>Mean Bias (mm)</th>
+                    <th>Heavy-Rain MAE (mm)</th>
+                    <th>99th Pct Error (mm)</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-period-metrics">
+                  <!-- Dynamically populated or loaded from API -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Disagreement Bin Calibration Table -->
+          <div class="doc-table-card">
+            <div class="table-card-head">
+              <h3 class="table-card-title">Disagreement Bin Calibration (Frozen Confidence Engine)</h3>
+              <span class="table-card-sub">Empirical error distributions across 72,772 monsoon samples</span>
+            </div>
+            <div class="table-scroll-wrap">
+              <table class="scientific-table" id="table-bin-metrics">
+                <thead>
+                  <tr>
+                    <th>Confidence Class</th>
+                    <th>Disagreement Threshold (D)</th>
+                    <th>Samples (N)</th>
+                    <th>Mean D (mm)</th>
+                    <th>GFS MAE (mm)</th>
+                    <th>ECMWF MAE (mm)</th>
+                    <th>50/50 Fused MAE (mm)</th>
+                    <th>50/50 RMSE (mm)</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-bin-metrics">
+                  <!-- Dynamically populated or loaded from API -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 3: SCIENTIFIC METHODOLOGY & RESEARCH EVOLUTION
+           ======================================================== -->
+      <section class="view-panel" id="view-methodology">
+        <div class="document-scroll-view">
+          
+          <div class="doc-header-banner">
+            <span class="doc-kicker">SCIENTIFIC RIGOR &amp; PROVENANCE</span>
+            <h2 class="doc-title">Architectural Methodology: Baseline to Operational Prototype</h2>
+            <p class="doc-desc">
+              From single-model baseline verification to multi-period out-of-sample validation. An evidence-based pathway establishing equal-weight fusion and disagreement-based confidence.
+            </p>
+          </div>
+
+          <!-- Evolutionary Milestone Cards -->
+          <div class="evolution-pipeline-grid">
+            <div class="milestone-card">
+              <span class="milestone-badge">PHASE 1</span>
+              <h3 class="milestone-title">Single-Model GFS Baseline</h3>
+              <p class="milestone-desc">
+                Established 0.25° spatial grid over AP &amp; Telangana. Validated 24h accumulation alignment with IMD gridded rainfall (June 2024, N=23,730, MAE 7.04 mm, RMSE 13.72 mm).
+              </p>
+            </div>
+            <div class="milestone-card">
+              <span class="milestone-badge">PHASE 2</span>
+              <h3 class="milestone-title">ECMWF IFS Integration</h3>
+              <p class="milestone-desc">
+                Ingested ECMWF IFS open-data 0.25° run. Discovered orthogonal errors (r &asymp; 0.55). Demonstrated that a 50/50 static ensemble drops MAE to 6.67 mm and RMSE to 11.39 mm (p &lt; 0.0001).
+              </p>
+            </div>
+            <div class="milestone-card">
+              <span class="milestone-badge">PHASE 3</span>
+              <h3 class="milestone-title">Adaptive Weighting Audit</h3>
+              <p class="milestone-desc">
+                Evaluated 7 causal adaptive weighting architectures under strictly causal T-1 latency. Demonstrated that adaptive weighting fails to show statistically significant MAE improvement (p = 0.505).
+              </p>
+            </div>
+            <div class="milestone-card">
+              <span class="milestone-badge">PHASE 4</span>
+              <h3 class="milestone-title">Multi-Period Generalization</h3>
+              <p class="milestone-desc">
+                Expanded across July &amp; August 2024 (N=72,772). Proved 50/50 superiority (p = 0.016) and established the calibrated disagreement confidence engine.
+              </p>
+            </div>
+          </div>
+
+          <!-- Technical FAQs -->
+          <div class="methodology-faq-list">
+            <div class="faq-item">
+              <h3 class="faq-question">Why two NWP models?</h3>
+              <p class="faq-answer">
+                NOAA GFS and ECMWF IFS employ distinct numerical dynamical cores and microphysical convective parameterizations. Their forecast errors over the Indian monsoon region are only moderately correlated (r &asymp; 0.55). Combining both models creates an ensemble that cancels out individual spatial biases.
+              </p>
+            </div>
+
+            <div class="faq-item">
+              <h3 class="faq-question">Why a validated 50/50 equal-weight ensemble?</h3>
+              <p class="faq-answer">
+                Across the June–August evaluation period, the tested adaptive fusion did not demonstrate a robust MAE advantage over the 50/50 ensemble (50/50 MAE: <strong>7.321 mm</strong> vs. adaptive MAE: <strong>7.372 mm</strong>, p = 0.016 via paired bootstrap); therefore, equal-weight fusion was retained as the operational strategy. Equal weighting provides maximum robustness against monsoon synoptic variability without incurring parameter instability.
+              </p>
+            </div>
+
+            <div class="faq-item">
+              <h3 class="faq-question">Why model disagreement for confidence?</h3>
+              <p class="faq-answer">
+                Historical evaluation found a positive association between model disagreement D = |GFS - ECMWF| and forecast error magnitude (r = 0.4915, ρ = 0.5843). When models agree (D &lt; 0.11 mm), historical MAE is <strong>2.02 mm</strong>. When they diverge (D &ge; 2.06 mm), historical MAE rises to <strong>9.46 mm</strong>.
+              </p>
+            </div>
+
+            <div class="faq-item">
+              <h3 class="faq-question">Why NO Machine Learning or Neural Networks?</h3>
+              <p class="faq-answer">
+                This is a cornerstone of scientific discipline. When causal empirical evaluation proves that tested adaptive weighting does not provide an operational advantage over the static ensemble, adding non-linear neural networks or black-box ML would introduce unjustified complexity and temporal leakage risks without demonstrated benefit.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================================
+           VIEW 4: ABOUT VIEW
+           ======================================================== -->
+      <section class="view-panel" id="view-about">
+        <div class="document-scroll-view">
+          
+          <div class="doc-header-banner">
+            <span class="doc-kicker">PROJECT OVERVIEW</span>
+            <h2 class="doc-title">About SIH26081 Precipitation Fusion</h2>
+            <p class="doc-desc">
+              An operational, research-validated multi-model meteorological intelligence platform developed for Smart India Hackathon.
+            </p>
+          </div>
+
+          <div class="about-cards-grid">
+            <div class="about-card">
+              <h3 class="ac-title">Mission</h3>
+              <p>
+                To provide disaster management authorities, agricultural planners, and meteorological stakeholders in Andhra Pradesh and Telangana with a dependable, explainable, and scientifically validated rainfall forecast intelligence platform that pairs multi-model consensus with transparent, empirical uncertainty metrics.
+              </p>
+            </div>
+            <div class="about-card">
+              <h3 class="ac-title">Geospatial Domain</h3>
+              <p>
+                <strong>Coordinates:</strong> 12.0°N to 20.0°N, 76.0°E to 85.0°E<br>
+                <strong>Resolution:</strong> 0.25° &times; 0.25° (~27 km grid cells)<br>
+                <strong>Coverage:</strong> 791 verified land cells across Coastal Andhra Pradesh (136 cells), Rayalaseema (224 cells), and Telangana (341 cells).
+              </p>
+            </div>
+            <div class="about-card">
+              <h3 class="ac-title">Data Ingestion Specifications</h3>
+              <p>
+                • <strong>NOAA GFS:</strong> 0.25° Global Forecast System, 00 UTC cycle, 0–24h APCP accumulation.<br>
+                • <strong>ECMWF IFS:</strong> 0.25° Integrated Forecasting System, 00 UTC cycle, 0–24h total precipitation (tp).<br>
+                • <strong>IMD Gridded Rainfall:</strong> 0.25° daily gridded binary observation from National Climate Centre, IMD Pune.
+              </p>
+            </div>
+            <div class="about-card">
+              <h3 class="ac-title">Scientific Guardrails</h3>
+              <p>
+                • <strong>Zero Fabricated Probabilities:</strong> We report empirical confidence classes and validated historical MAE values, never arbitrary percentage probabilities.<br>
+                • <strong>Zero Silent Substitution:</strong> Missing source data produces explicit system status codes rather than masked zeroes or synthetic interpolations.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Slim Operational Footer Bar -->
+    <footer class="app-status-bar" role="contentinfo">
+      <div class="status-pill">
+        <span class="k">Sources:</span>
+        <span class="v">NOAA GFS (0.25°) + ECMWF IFS (0.25°)</span>
+      </div>
+      <div class="status-pill">
+        <span class="k">Fusion:</span>
+        <span class="v">50/50 Equal-Weight Static Centroid</span>
+      </div>
+      <div class="status-pill">
+        <span class="k">Confidence:</span>
+        <span class="v">Calibrated Disagreement Engine</span>
+      </div>
+      <div class="status-pill">
+        <span class="k">Verification:</span>
+        <span class="v">IMD 0.25° Daily Rainfall (Causal T-1)</span>
+      </div>
+    </footer>
+
+    <!-- ========================================================
+         JUDGE DEMO TOUR MODAL OVERLAY
+         ======================================================== -->
+    <div class="demo-overlay hidden" id="demo-overlay" role="dialog" aria-modal="true" aria-labelledby="demo-step-title">
+      <div class="demo-modal">
+        <div class="demo-modal-header">
+          <div class="demo-badge">
+            <span class="pulse-ring"></span>
+            <span>SIH JUDGE GUIDED TECHNICAL TOUR</span>
+          </div>
+          <button class="btn-demo-close" id="btn-close-demo" aria-label="Exit demo tour">✕</button>
+        </div>
+
+        <div class="demo-modal-body">
+          <div class="demo-step-indicator">
+            <span class="step-dot active" data-step="1">1</span>
+            <span class="step-dot" data-step="2">2</span>
+            <span class="step-dot" data-step="3">3</span>
+            <span class="step-dot" data-step="4">4</span>
+            <span class="step-dot" data-step="5">5</span>
+            <span class="step-dot" data-step="6">6</span>
+            <span class="step-dot" data-step="7">7</span>
+          </div>
+
+          <h3 class="demo-step-title" id="demo-step-title">1. Operational Problem &amp; Domain Overview</h3>
+          <p class="demo-step-desc" id="demo-step-desc">
+            Welcome to SIH26081. We solve the critical challenge of extreme weather decision support by fusing independent NWP models (NOAA GFS &amp; ECMWF IFS) and providing explainable forecast confidence based on model disagreement.
+          </p>
+
+          <div class="demo-interactive-preview" id="demo-step-preview"></div>
+        </div>
+
+        <div class="demo-modal-footer">
+          <button class="btn-demo-nav" id="btn-demo-prev" disabled>◀ Back</button>
+          <div class="demo-progress-text" id="demo-progress-text">Step 1 of 6</div>
+          <button class="btn-demo-nav btn-demo-primary" id="btn-demo-next">Next Step ▶</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================
+         ERROR NOTIFICATION MODAL
+         ======================================================== -->
+    <div class="error-modal-overlay hidden" id="error-modal" role="alertdialog" aria-modal="true">
+      <div class="error-card">
+        <div class="error-icon" id="error-modal-icon">⚠️</div>
+        <h3 class="error-title" id="error-modal-title">FORECAST UNAVAILABLE</h3>
+        <p class="error-message" id="error-modal-msg">No forecast is available for this date.</p>
+        <div class="error-details" id="error-modal-details">Available period: 01 June – 31 August 2024</div>
+        <button class="btn-error-close" id="btn-error-dismiss">Dismiss</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Three.js & OrbitControls for 3D Analytical Precipitation View -->
+  <script src="vendor/three.min.js"></script>
+  <script>window.THREE || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\\/script>')</script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script>window.THREE && window.THREE.OrbitControls || document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\\/script>')</script>
+
+  <!-- 3D Analytical Visualization Engine -->
+  <script src="threed_view.js"></script>
+
+  <!-- Workstation Application JS -->
+  <script src="app.js"></script>
+</body>
+</html>

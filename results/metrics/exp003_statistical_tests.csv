@@ -1,0 +1,8 @@
+Comparison,Metric,Mean Difference,95% CI Lower,95% CI Upper,P-Value,Statistically Significant (p<0.05)
+Model 7 vs NOAA GFS,MAE,-0.3653,-0.4567,-0.2745,0.0,True
+Model 7 vs ECMWF IFS,MAE,-0.5875,-0.6394,-0.5318,0.0,True
+Model 7 vs 50/50 Ensemble,MAE,-0.0001,-0.0248,0.0248,0.505,False
+Model 7 vs Best Fixed Weight,MAE,-0.0001,-0.025,0.0244,0.465,False
+Model 6 vs 50/50 Ensemble,MAE,-0.0066,-0.015,0.0019,0.059,False
+Model 5 vs 50/50 Ensemble,MAE,0.0104,-0.0199,0.0423,0.26,False
+Model 7 vs 50/50 Ensemble (MSE),MSE,-2.2797,-3.5712,-0.9451,0.0,True

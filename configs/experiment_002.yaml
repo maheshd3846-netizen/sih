@@ -1,0 +1,32 @@
+experiment: EXP002
+
+region:
+  name: AP_Telangana_experimental_domain
+  lat_min: 12
+  lat_max: 20
+  lon_min: 76
+  lon_max: 85
+
+forecasts:
+  - id: NOAA_GFS
+    source: NOAA_GFS
+    cycle: "00"
+    lead_hours: 24
+    variable: "APCP"
+    raw_units: "kg m**-2"
+  - id: ECMWF_IFS
+    source: ECMWF_IFS_0p25_oper
+    cycle: "00"
+    lead_hours: 24
+    variable: "tp"
+    raw_units: "m"
+
+verification:
+  source: IMD
+  resolution: "0.25deg"
+  variable: "rainfall"
+  raw_units: "mm"
+
+period:
+  start: "2024-06-01"
+  end: "2024-06-30"

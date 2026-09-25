@@ -1,0 +1,94 @@
+experiment: EXP004
+description: "Multi-Period Robustness + Model-Disagreement Analysis (June, July, August 2024)"
+
+region:
+  name: AP_Telangana_experimental_domain
+  lat_min: 12
+  lat_max: 20
+  lon_min: 76
+  lon_max: 85
+
+forecasts:
+  - id: NOAA_GFS
+    source: NOAA_GFS
+    cycle: "00"
+    lead_hours: 24
+    variable: "APCP"
+    raw_units: "kg m**-2"
+  - id: ECMWF_IFS
+    source: ECMWF_IFS_0p25_oper
+    cycle: "00"
+    lead_hours: 24
+    variable: "tp"
+    raw_units: "m"
+
+verification:
+  source: IMD
+  resolution: "0.25deg"
+  variable: "rainfall"
+  raw_units: "mm"
+
+periods:
+  calibration:
+    id: "W0"
+    name: "Pre-Monsoon Calibration"
+    start: "2024-05-17"
+    end: "2024-05-31"
+  period_1:
+    id: "P1"
+    name: "June 2024 (Monsoon Onset)"
+    start: "2024-06-01"
+    end: "2024-06-30"
+  period_2:
+    id: "P2"
+    name: "July 2024 (Peak Monsoon Active)"
+    start: "2024-07-01"
+    end: "2024-07-31"
+  period_3:
+    id: "P3"
+    name: "August 2024 (Peak Monsoon Active/Break)"
+    start: "2024-08-01"
+    end: "2024-08-31"
+
+operational_constraints:
+  operational_latency_days: 1
+  default_rolling_window_days: 5
+  candidate_windows: [3, 5, 7]
+
+disagreement_analysis:
+  epsilon_norm: 1.0  # mm, regularizer for normalized disagreement D_norm
+  bin_strategy: "tertiles_on_calibration_data"
+
+statistical_testing:
+  method: "day_level_paired_bootstrap"
+  iterations: 1000
+  alpha: 0.05
+
+subregions:
+  Coastal_AP:
+    lat_min: 12.0
+    lat_max: 19.0
+    lon_min: 80.5
+    lon_max: 85.0
+  Rayalaseema:
+    lat_min: 12.0
+    lat_max: 15.5
+    lon_min: 76.0
+    lon_max: 80.0
+  Telangana:
+    lat_min: 15.5
+    lat_max: 20.0
+    lon_min: 76.0
+    lon_max: 80.5
+
+regimes:
+  dry:
+    threshold_max: 0.1
+  light:
+    threshold_min: 0.1
+    threshold_max: 5.0
+  moderate:
+    threshold_min: 5.0
+    threshold_max: 15.0
+  heavy:
+    threshold_min: 15.0
