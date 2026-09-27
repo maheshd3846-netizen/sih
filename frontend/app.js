@@ -28,8 +28,8 @@ const state = {
   viewDimension: "2d", // "2d" | "3d"
   threeMode: "rain", // "rain" | "disagreement"
   threeShowLowConf: false,
-  threeViewer: null,
 };
+window.state = state;
 
 // Basemap Tiles (Zero Watermark / Clean Restrained GIS Basemaps)
 const TILES = {
@@ -382,7 +382,7 @@ function setupEventListeners() {
     btn.addEventListener("click", () => {
       document.querySelectorAll("[data-3dmode]").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      state.threeMode = btn.dataset.3dmode || btn.getAttribute("data-3dmode");
+      state.threeMode = btn.dataset["3dmode"] || btn.getAttribute("data-3dmode");
       update3DNoticeBanner();
       if (state.threeViewer && state.currentGridData) {
         state.threeViewer.renderData(
