@@ -431,8 +431,8 @@ function setupEventListeners() {
       if (state.operationalMode === "live" && btn.dataset.layer === "imd") {
         showErrorModal(
           "IMD OBSERVATIONS NOT AVAILABLE",
-          "Ground observations for the current 24-hour live forecast run have not occurred yet.",
-          "Verification is strictly retrospective. Ground truth observations from IMD will become available only after the 24-hour accumulation window concludes."
+          "IMD retrospective observations for the current 24-hour live forecast run have not occurred yet.",
+          "Verification is strictly retrospective. IMD retrospective observations will become available only after the 24-hour accumulation window concludes."
         );
         return;
       }
@@ -779,7 +779,7 @@ async function setOperationalMode(mode) {
     }
 
     if (imdLayerBtn) {
-      imdLayerBtn.title = "Ground observations are pending for the live forecast run.";
+      imdLayerBtn.title = "IMD retrospective observations are pending for the live forecast run.";
       const label = imdLayerBtn.querySelector("span:not(.layer-bullet)");
       if (label) label.textContent = "IMD Retrospective (Pending)";
     }

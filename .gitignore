@@ -1,0 +1,24 @@
+# Python bytecode and caches
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Raw NWP GRIB2 files (retrospective and live downloads)
+data/raw/**/*.grib2
+data/raw/ecmwf/*.grib2
+data/raw/gfs/*.grib2
+
+# Operational runtime live forecast cache (generated/loaded dynamically)
+data/processed/live/*.json
+
+# Testing and editor artifacts
+.pytest_cache/
+.coverage
+.vscode/
+.idea/

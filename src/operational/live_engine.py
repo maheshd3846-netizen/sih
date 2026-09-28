@@ -527,7 +527,7 @@ class LiveForecastEngine:
         init_time_str = f"{target_date.strftime('%Y-%m-%d')}T00:00:00Z"
         valid_date = target_date + timedelta(days=1)
         valid_time_str = f"{valid_date.strftime('%Y-%m-%d')}T00:00:00Z"
-        generated_ts = datetime.now(timezone.utc).isoformat() + "Z"
+        generated_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         response_payload = {
             "status": "SUCCESS",
@@ -606,44 +606,46 @@ class LiveForecastEngine:
             target_date = target_date_val
         else:
             target_date = None
-        if target_date is None:
-            # Check latest cache
-            cached_files = [f for f in os.listdir(self.cache_dir) if f.startswith("live_forecast_") and f.endswith(".json")]
-            if cached_files:
-                cached_files.sort(reverse=True)
-                latest_cache_file = os.path.join(self.cache_dir, cached_files[0])
-                try:
-                    with open(latest_cache_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    target_date = datetime.strptime(data["initialization_date"], "%Y-%m-%d").date()
-                except Exception:
-                    pass
 
-        if target_date is None:
-            target_date = datetime.now(timezone.utc).date()
+        # Strictly enforce that if current matching run cannot be verified,
+        # we never present older cached forecasts as the live operational run.
+        if discovery.get("status") != "SUCCESS" or target_date is None:
+            return {
+                "status": discovery.get("status", "LATEST_RUN_NOT_AVAILABLE"),
+                "mode": "LIVE",
+                "live_forecast_available": False,
+                "latest_available_run": None,
+                "initialization_time": None,
+                "valid_time": None,
+                "lead_hours": DEFAULT_LEAD_HOURS,
+                "gfs_availability": "AVAILABLE" if discovery.get("gfs_available", False) else "UNAVAILABLE",
+                "ecmwf_availability": "AVAILABLE" if discovery.get("ecmwf_available", False) else "UNAVAILABLE",
+                "cache_age": "UNAVAILABLE",
+                "cache_age_seconds": None,
+                "cell_count": EXPECTED_CELL_COUNT,
+                "data_integrity_status": "MATCHING_RUN_UNAVAILABLE",
+                "reason": discovery.get("reason", "Current matching GFS + ECMWF operational run cannot be verified."),
+                "discovery_details": discovery
+            }
 
         cache_path = self._get_cache_filepath(target_date)
         cache_exists = os.path.exists(cache_path)
-        cache_age_seconds = None
-        cache_age_desc = "NO_CACHE"
-
-        if cache_exists:
-            mtime = os.path.getmtime(cache_path)
-            cache_age_seconds = int(time.time() - mtime)
-            cache_age_desc = f"{cache_age_seconds}s"
+        cache_age_seconds = int(time.time() - os.path.getmtime(cache_path)) if cache_exists else None
+        cache_age_desc = f"{cache_age_seconds}s" if cache_exists else "NOT_YET_CACHED"
 
         init_time_str = f"{target_date.strftime('%Y-%m-%d')}T00:00:00Z"
         valid_time_str = f"{(target_date + timedelta(days=1)).strftime('%Y-%m-%d')}T00:00:00Z"
 
         return {
-            "status": "ONLINE" if discovery["status"] == "SUCCESS" else discovery["status"],
+            "status": "ONLINE",
             "mode": "LIVE",
+            "live_forecast_available": True,
             "latest_available_run": target_date.isoformat(),
             "initialization_time": init_time_str,
             "valid_time": valid_time_str,
             "lead_hours": DEFAULT_LEAD_HOURS,
-            "gfs_availability": "AVAILABLE" if discovery.get("gfs_available", False) else "UNAVAILABLE",
-            "ecmwf_availability": "AVAILABLE" if discovery.get("ecmwf_available", False) else "UNAVAILABLE",
+            "gfs_availability": "AVAILABLE",
+            "ecmwf_availability": "AVAILABLE",
             "cache_age": cache_age_desc,
             "cache_age_seconds": cache_age_seconds,
             "cell_count": EXPECTED_CELL_COUNT,
