@@ -4042,4 +4042,234 @@ details.tech-accordion-item summary::-webkit-details-marker {
   font-weight: 600;
 }
 
+/* ========================================================
+   LIVE 24-HOUR FORECASTING SUBSYSTEM STYLES
+   ======================================================== */
+.header-mode-switch {
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-xs);
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.mode-switch-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  line-height: 1.1;
+  letter-spacing: 0.3px;
+}
+
+.mode-switch-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mode-switch-btn.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(45, 212, 191, 0.25) 100%);
+  color: #ffffff;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+}
+
+.live-pulse-dot {
+  width: 7px;
+  height: 7px;
+  background: #10b981;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 6px #10b981;
+  animation: liveDotPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes liveDotPulse {
+  0% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 4px #10b981; }
+  50% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 9px #34d399; }
+  100% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 4px #10b981; }
+}
+
+.live-run-banner {
+  display: flex;
+  align-items: center;
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: var(--radius-xs);
+  padding: 2px 8px;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+}
+
+.live-run-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
+  background: rgba(56, 189, 248, 0.18);
+  padding: 2px 5px;
+  border-radius: 2px;
+}
+
+.live-run-times {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.70rem;
+}
+
+.run-time-item strong {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.run-sep {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.run-source-tag {
+  background: rgba(45, 212, 191, 0.18);
+  color: #2dd4bf;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+/* Timeline dock in live mode */
+.timeline-live-dock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.timeline-live-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-live-tag {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  font-weight: 700;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.timeline-live-meta {
+  font-family: var(--font-mono);
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+
+/* Live Cell Inspector Pending IMD State */
+.live-verif-pending-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.live-verif-pending-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+
+.live-verif-pending-desc {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.live-verif-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+/* Live Operational Error Modal / Banner */
+.live-error-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #ef4444;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 520px;
+  width: 90%;
+  z-index: 2000;
+  color: #f8fafc;
+  text-align: center;
+}
+
+.live-error-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.live-error-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #f87171;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.live-error-reason {
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.live-error-note {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+
 

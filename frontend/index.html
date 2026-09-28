@@ -61,22 +61,48 @@
           <h1 class="brand-main-title">SIH26081</h1>
           <span class="brand-sub-title">Multi-Model NWP Consensus</span>
         </div>
-        <div class="header-retro-badge" title="Current prototype demonstrates the validated historical workflow; it is not a live 2026 forecast feed.">
-          <span class="retro-dot"></span>
-          <span class="retro-text">RETROSPECTIVE DEMONSTRATION &bull; JUN&ndash;AUG 2024</span>
-        </div>
       </div>
 
       <div class="header-divider" aria-hidden="true"></div>
 
-      <!-- 2. Operational Date Scrubber -->
-      <div class="op-date-control" title="Operational Forecast Date">
+      <!-- Mode Switcher: LIVE FORECAST vs RETROSPECTIVE -->
+      <div class="header-mode-switch" role="group" aria-label="Operational Forecast Mode">
+        <button class="mode-switch-btn active" id="btn-mode-live" data-mode="live" title="Current 24-Hour Live NWP Forecast (NOAA GFS + ECMWF IFS)">
+          <span class="live-pulse-dot"></span>
+          <span class="mode-title">LIVE FORECAST</span>
+        </button>
+        <button class="mode-switch-btn" id="btn-mode-retro" data-mode="retrospective" title="Retrospective Demonstration (Jun–Aug 2024 with IMD Verification)">
+          <span class="mode-title">RETROSPECTIVE</span>
+        </button>
+      </div>
+
+      <div class="header-divider" aria-hidden="true"></div>
+
+      <!-- Live Run Indicator Banner (Default Live Mode) -->
+      <div class="live-run-banner" id="live-run-banner" title="Current 24-Hour NWP Forecast Run">
+        <span class="live-run-tag">CURRENT 24-HOUR FORECAST</span>
+        <div class="live-run-times">
+          <span class="run-time-item">Init: <strong id="header-live-init">28 SEP 2026 00 UTC</strong></span>
+          <span class="run-sep">•</span>
+          <span class="run-time-item">Valid: <strong id="header-live-valid">29 SEP 2026 00 UTC</strong></span>
+          <span class="run-sep">•</span>
+          <span class="run-source-tag">GFS + ECMWF</span>
+        </div>
+      </div>
+
+      <!-- Retrospective Date Scrubber (Active only in Retrospective Mode) -->
+      <div class="op-date-control hidden" id="retro-date-control" title="Retrospective Forecast Date (2024-06-01 to 2024-08-31)">
         <button class="btn-step-day" id="btn-prev-day" title="Previous Operational Day (◀)" aria-label="Previous Day">◀</button>
         <div class="date-display-box" title="Click to select forecast date">
           <span class="date-label-mono" id="header-date-text">15 JUL 2024</span>
           <input type="date" id="date-picker" min="2024-06-01" max="2024-08-31" value="2024-07-15" aria-label="Select forecast date">
         </div>
         <button class="btn-step-day" id="btn-next-day" title="Next Operational Day (▶)" aria-label="Next Day">▶</button>
+      </div>
+
+      <div class="header-retro-badge hidden" id="header-retro-badge" title="Validated historical demonstration; not a live forecast feed.">
+        <span class="retro-dot"></span>
+        <span class="retro-text">RETROSPECTIVE &bull; JUN&ndash;AUG 2024</span>
       </div>
 
       <div class="header-divider" aria-hidden="true"></div>
@@ -319,7 +345,19 @@
 
             <!-- Integrated Timeline Scrubber Bar (Docked at Bottom of Map) -->
             <div class="map-timeline-dock">
-              <div class="timeline-controls-row">
+              <!-- Live Mode Info Bar -->
+              <div class="timeline-live-dock-bar" id="timeline-live-dock-bar">
+                <div class="timeline-live-left">
+                  <span class="timeline-live-tag"><span class="live-pulse-dot"></span> LIVE 24H NWP RUN</span>
+                  <span class="timeline-live-meta" id="timeline-live-text">CURRENT 24-HOUR FORECAST &bull; NOAA GFS 00Z + ECMWF IFS 00Z &bull; EQUAL-WEIGHT CENTROID</span>
+                </div>
+                <div class="timeline-live-right" style="font-family: var(--font-mono); font-size: 0.70rem; color: #38bdf8;">
+                  Valid: <strong id="dock-live-valid">29 SEP 2026 00 UTC</strong> (+24h Lead)
+                </div>
+              </div>
+
+              <!-- Retrospective Controls Row -->
+              <div class="timeline-controls-row hidden" id="timeline-retro-controls">
                 <button class="btn-timeline-play" id="btn-play-pause" title="Play / Pause 92-Day Monsoon Timeline">
                   <span id="play-icon">▶</span>
                   <span id="play-text">Play</span>
@@ -766,13 +804,25 @@
                 <div class="imd-audit-card" id="inspect-verification-section">
                   <div class="imd-audit-head">
                     <div class="audit-titles">
-                      <span class="section-micro-label">HISTORICAL OBSERVATION</span>
-                      <h3 class="audit-headline">IMD Retrospective Verification</h3>
+                      <span class="section-micro-label" id="inspect-verif-kicker">HISTORICAL OBSERVATION</span>
+                      <h3 class="audit-headline" id="inspect-verif-headline">IMD Retrospective Verification</h3>
                     </div>
-                    <span class="badge-causal-pill">Strictly Causal (T-1)</span>
+                    <span class="badge-causal-pill" id="inspect-verif-pill">Strictly Causal (T-1)</span>
                   </div>
 
-                  <div class="audit-stats-grid">
+                  <!-- Live Mode Container: NOT AVAILABLE FOR CURRENT FORECAST -->
+                  <div class="live-verif-pending-box hidden" id="inspect-live-pending-box">
+                    <div class="live-verif-pending-title">NOT AVAILABLE FOR CURRENT FORECAST</div>
+                    <div class="live-verif-pending-desc">
+                      Ground observations for this live run (valid until <span id="inspect-live-valid-text">--</span>) have not occurred yet. Retrospective IMD evaluation will only be performed once ground observations are published.
+                    </div>
+                    <div class="live-verif-pending-badge">
+                      <span>🔒 Zero ML &bull; Zero Synthetic Data &bull; No Fake Observations</span>
+                    </div>
+                  </div>
+
+                  <!-- Retrospective Mode Stats Grid -->
+                  <div class="audit-stats-grid" id="inspect-retro-stats-grid">
                     <div class="audit-stat-item">
                       <span class="audit-k">IMD Retrospective Observation:</span>
                       <span class="audit-v text-imd-purple" id="inspect-imd-val">-- mm</span>
@@ -793,7 +843,7 @@
                     <span class="verif-tag-text" id="inspect-verif-status-text">OVER-FORECAST</span>
                   </div>
 
-                  <p class="audit-temporal-note">
+                  <p class="audit-temporal-note" id="inspect-verif-note">
                     IMD Retrospective Observation used for historical verification. Observation window ends 08:30 IST (~87.5% temporal overlap with 00–00 UTC forecast run). Strictly zero same-day leakage.
                   </p>
                 </div>
