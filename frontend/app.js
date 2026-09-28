@@ -247,6 +247,8 @@ function initMap() {
 
 function toggleBasemap() {
   state.isDarkMode = !state.isDarkMode;
+  const btn = document.getElementById("btn-basemap-toggle");
+  if (btn) btn.classList.toggle("active", state.isDarkMode);
   const config = state.isDarkMode ? TILES.dark : TILES.light;
   state.map.removeLayer(state.baseTileLayer);
   state.baseTileLayer = L.tileLayer(config.url, {
@@ -468,13 +470,38 @@ function setupEventListeners() {
   document.getElementById("btn-inspect-peak-rain").addEventListener("click", inspectPeakRainfallCell);
 
   // Judge Demo Tour Triggers
-  document.getElementById("btn-start-demo").addEventListener("click", startDemoTour);
-  document.getElementById("btn-close-demo").addEventListener("click", closeDemoTour);
-  document.getElementById("btn-demo-prev").addEventListener("click", () => stepDemo(-1));
-  document.getElementById("btn-demo-next").addEventListener("click", () => stepDemo(1));
+  const btnStartDemo = document.getElementById("btn-start-demo");
+  if (btnStartDemo) btnStartDemo.addEventListener("click", startDemoTour);
+  const btnCloseDemo = document.getElementById("btn-close-demo");
+  if (btnCloseDemo) btnCloseDemo.addEventListener("click", closeDemoTour);
+  const btnDemoPrev = document.getElementById("btn-demo-prev");
+  if (btnDemoPrev) btnDemoPrev.addEventListener("click", () => stepDemo(-1));
+  const btnDemoNext = document.getElementById("btn-demo-next");
+  if (btnDemoNext) btnDemoNext.addEventListener("click", () => stepDemo(1));
 
   // Error Modal Dismiss
   document.getElementById("btn-error-dismiss").addEventListener("click", hideErrorModal);
+
+  // Why Weights Modal
+  const btnWhyWeights = document.getElementById("btn-why-weights");
+  if (btnWhyWeights) btnWhyWeights.addEventListener("click", openWhyWeightsModal);
+  const btnCloseWW = document.getElementById("btn-close-ww-modal");
+  if (btnCloseWW) btnCloseWW.addEventListener("click", closeWhyWeightsModal);
+  const wwOverlay = document.getElementById("why-weights-overlay");
+  if (wwOverlay) wwOverlay.addEventListener("click", (e) => { if (e.target === wwOverlay) closeWhyWeightsModal(); });
+}
+
+/* ========================================================
+   WHY-WEIGHTS MODAL CONTROLS
+   ======================================================== */
+function openWhyWeightsModal() {
+  const overlay = document.getElementById("why-weights-overlay");
+  if (overlay) overlay.classList.remove("hidden");
+}
+
+function closeWhyWeightsModal() {
+  const overlay = document.getElementById("why-weights-overlay");
+  if (overlay) overlay.classList.add("hidden");
 }
 
 /* ========================================================
@@ -620,6 +647,130 @@ function updateDomainStats(data) {
   document.getElementById("pct-high").textContent = `${highPct}%`;
   document.getElementById("pct-mod").textContent = `${modPct}%`;
   document.getElementById("pct-low").textContent = `${lowPct}%`;
+
+  // ── UI ENHANCEMENT v2: Update new intelligence panels ──
+  updateIntelHero(meanFused, highPct, modPct, lowPct, data);
+  updateWeightsCard(meanGfs, meanEcmwf, meanFused);
+  updateExtremeEvents(maxFused, visiblePoints);
+}
+
+/* ========================================================
+   INTELLIGENCE HERO BAR UPDATE
+   ======================================================== */
+function updateIntelHero(meanFused, highPct, modPct, lowPct, data) {
+  const heroNum = document.getElementById("hero-fused-val");
+  if (heroNum) heroNum.textContent = meanFused;
+
+  // Determine dominant confidence class
+  const hp = parseFloat(highPct), mp = parseFloat(modPct), lp = parseFloat(lowPct);
+  let confClass, confLabel;
+  if (hp >= mp && hp >= lp) { confClass = "conf-high"; confLabel = "HIGH CONFIDENCE"; }
+  else if (lp >= hp && lp >= mp) { confClass = "conf-low"; confLabel = "LOW CONFIDENCE"; }
+  else { confClass = "conf-mod"; confLabel = "MODERATE CONFIDENCE"; }
+
+  const badge = document.getElementById("hero-conf-badge");
+  const text = document.getElementById("hero-conf-text");
+  if (badge) {
+    badge.className = `intel-conf-badge ${confClass}`;
+    badge.querySelector(".intel-conf-dot").style.background = "currentColor";
+  }
+  if (text) text.textContent = confLabel;
+
+  // Season detection from date
+  if (data && data.forecast_date) {
+    const month = parseInt(data.forecast_date.split("-")[1], 10);
+    const season = month >= 6 && month <= 9 ? "SW Monsoon" : month >= 10 && month <= 11 ? "NE Monsoon" : "Pre-Monsoon";
+    const ctxSeason = document.getElementById("mw-ctx-season");
+    if (ctxSeason) ctxSeason.textContent = season;
+    const ctxSeason2 = document.getElementById("wpage-ctx-season");
+    if (ctxSeason2) ctxSeason2.textContent = season;
+  }
+
+  // Why-Fused dynamic text
+  const whyText = document.getElementById("why-fused-text");
+  if (whyText) {
+    whyText.innerHTML = `The 50/50 equal-weight ensemble was retained as the operational strategy after empirical evaluation showed no statistically robust MAE advantage for adaptive weighting (p = 0.016). Both NOAA GFS and ECMWF IFS are equally weighted because their historical errors over the AP &amp; Telangana domain are comparable. Model disagreement D determines the empirical confidence class &mdash; <strong>${lp.toFixed(1)}%</strong> of domain cells are currently in the low-confidence regime.`;
+  }
+}
+
+/* ========================================================
+   MODEL WEIGHTS CARD UPDATE (uses real domain values)
+   ======================================================== */
+function updateWeightsCard(meanGfs, meanEcmwf, meanFused) {
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // Side panel weights card
+  setEl("mw-val-gfs", `${meanGfs} mm`);
+  setEl("mw-val-ecmwf", `${meanEcmwf} mm`);
+  setEl("mw-val-fused-w", `${meanFused} mm`);
+  setEl("mw-ctx-region", state.activeRegion === "All" ? "AP & Telangana" : state.activeRegion);
+
+  // Full weights page
+  setEl("wpage-gfs-val", `${meanGfs} mm`);
+  setEl("wpage-ecmwf-val", `${meanEcmwf} mm`);
+  setEl("wpage-fused-val", `${meanFused} mm`);
+  setEl("wpage-ctx-domain", state.activeRegion === "All" ? "AP & TG" : state.activeRegion);
+}
+
+/* ========================================================
+   EXTREME EVENTS GUIDANCE (derived from real forecast data)
+   IMD Categories: Heavy ≥ 15mm, Very Heavy ≥ 35mm, Extreme ≥ 65mm
+   ======================================================== */
+function updateExtremeEvents(maxFused, visiblePoints) {
+  const sub = document.getElementById("ee-rainfall-sub");
+  const badge = document.getElementById("ee-rainfall-risk");
+  if (!sub || !badge) return;
+
+  // Count cells exceeding IMD heavy rain thresholds
+  const heavyCells = visiblePoints.filter(p => p.fused_mm >= 15).length;
+  const vheavyCells = visiblePoints.filter(p => p.fused_mm >= 35).length;
+  const extCells = visiblePoints.filter(p => p.fused_mm >= 65).length;
+  const total = visiblePoints.length;
+
+  let riskClass = "ee-risk-na", riskLabel = "No signal", subText = "No heavy rainfall cells detected";
+
+  if (extCells > 0) {
+    riskClass = "ee-risk-high";
+    riskLabel = "EXTREME RISK";
+    subText = `${extCells} cell${extCells > 1 ? "s" : ""} ≥ 65mm (Extreme) · Peak: ${maxFused} mm`;
+  } else if (vheavyCells > 0) {
+    riskClass = "ee-risk-high";
+    riskLabel = "VERY HEAVY";
+    subText = `${vheavyCells} cell${vheavyCells > 1 ? "s" : ""} ≥ 35mm (Very Heavy) · Peak: ${maxFused} mm`;
+  } else if (heavyCells > 0) {
+    riskClass = "ee-risk-moderate";
+    riskLabel = "HEAVY RAIN";
+    subText = `${heavyCells} cell${heavyCells > 1 ? "s" : ""} ≥ 15mm (Heavy) · Peak: ${maxFused} mm`;
+  } else if (parseFloat(maxFused) > 5) {
+    riskClass = "ee-risk-low";
+    riskLabel = "LIGHT RAIN";
+    subText = `Peak ${maxFused} mm · Below heavy rain threshold (15mm)`;
+  } else {
+    subText = `Peak ${maxFused} mm · Dry to very light conditions`;
+  }
+
+  badge.className = `ee-risk-badge ${riskClass}`;
+  badge.textContent = riskLabel;
+  sub.textContent = subText;
+
+  // ── Also update the full Extreme Events page detailed signals ──
+  const setExtRow = (subId, badgeId, count, threshold, label, cls) => {
+    const s = document.getElementById(subId);
+    const b = document.getElementById(badgeId);
+    if (!s || !b) return;
+    if (count > 0) {
+      s.textContent = `${count} cell${count > 1 ? "s" : ""} forecast ≥ ${threshold} mm · Peak: ${maxFused} mm`;
+      b.className = `ee-risk-badge ${cls}`;
+      b.textContent = label;
+    } else {
+      s.textContent = `IMD Category: ≥ ${threshold} mm/24h · No cells detected`;
+      b.className = "ee-risk-badge ee-risk-na";
+      b.textContent = "Clear";
+    }
+  };
+  setExtRow("ext-extreme-sub", "ext-extreme-badge", extCells,   65, "EXTREME",   "ee-risk-high");
+  setExtRow("ext-veryheavy-sub", "ext-veryheavy-badge", vheavyCells, 35, "VERY HEAVY", extCells > 0 ? "ee-risk-high" : "ee-risk-moderate");
+  setExtRow("ext-heavy-sub", "ext-heavy-badge", heavyCells,   15, "HEAVY",     vheavyCells > 0 ? "ee-risk-moderate" : "ee-risk-low");
 }
 
 /* ========================================================
