@@ -185,15 +185,76 @@ function switchDimension(dim) {
   }
 
   updateLegend();
+  updateMapContextBadge();
 }
 
 function update3DNoticeBanner() {
   const noteElem = document.getElementById("three-variable-note");
   if (!noteElem) return;
   if (state.threeMode === "rain") {
-    noteElem.textContent = "Height represents forecast rainfall (P_fused), not terrain elevation.";
+    noteElem.innerHTML = "<strong>3D RAINFALL:</strong> Height = forecast rainfall &bull; Color = rainfall intensity (Z-axis is a visualization coordinate only).";
   } else {
-    noteElem.textContent = "Height represents model disagreement D = |GFS - ECMWF|, not terrain elevation.";
+    noteElem.innerHTML = "<strong>3D MODEL DISAGREEMENT:</strong> Height = |GFS − ECMWF| &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime under the validated thresholds.";
+  }
+}
+
+function updateMapContextBadge() {
+  const badge = document.getElementById("map-context-badge");
+  const titleEl = document.getElementById("map-context-title");
+  const unitEl = document.getElementById("map-context-unit");
+  const helperEl = document.getElementById("map-context-helper");
+  if (!badge || !titleEl || !unitEl || !helperEl) return;
+
+  if (state.viewDimension === "3d") {
+    if (state.threeMode === "rain") {
+      titleEl.textContent = "3D RAINFALL";
+      unitEl.textContent = "mm / 24h";
+      helperEl.innerHTML = "Height = forecast rainfall &bull; Color = rainfall intensity. Click any column to inspect.";
+    } else {
+      titleEl.textContent = "3D MODEL DISAGREEMENT";
+      unitEl.textContent = "|GFS − ECMWF| (mm)";
+      helperEl.innerHTML = "Height = |GFS − ECMWF| &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime under validated thresholds.";
+    }
+    return;
+  }
+
+  // 2D Map modes
+  switch (state.activeLayer) {
+    case "fused":
+      titleEl.textContent = "24-HOUR RAINFALL FORECAST";
+      unitEl.textContent = "mm / 24h";
+      helperEl.textContent = "Equal-weight fusion (50% GFS + 50% ECMWF). Click any location to inspect the forecast.";
+      break;
+    case "gfs":
+      titleEl.textContent = "NOAA GFS FORECAST";
+      unitEl.textContent = "mm / 24h";
+      helperEl.textContent = "Global Forecast System 0.25° NWP rainfall estimate. Click any location to inspect.";
+      break;
+    case "ecmwf":
+      titleEl.textContent = "ECMWF IFS FORECAST";
+      unitEl.textContent = "mm / 24h";
+      helperEl.textContent = "Integrated Forecasting System 0.25° NWP rainfall estimate. Click any location to inspect.";
+      break;
+    case "disagreement":
+      titleEl.textContent = "MODEL DISAGREEMENT";
+      unitEl.textContent = "|GFS − ECMWF| (mm)";
+      helperEl.textContent = "Higher disagreement is associated with higher historical forecast error. Click any location to inspect.";
+      break;
+    case "confidence":
+      titleEl.textContent = "EMPIRICAL CONFIDENCE";
+      unitEl.textContent = "High / Moderate / Low";
+      helperEl.textContent = "Confidence is based on historical model disagreement and observed forecast error. Click any location to inspect.";
+      break;
+    case "imd":
+      titleEl.textContent = "IMD RETROSPECTIVE OBSERVATION";
+      unitEl.textContent = "mm / 24h";
+      helperEl.textContent = "Historical gridded gauge observation (0.25° NCC Pune) for retrospective verification. Click any location to inspect.";
+      break;
+    default:
+      titleEl.textContent = "24-HOUR RAINFALL FORECAST";
+      unitEl.textContent = "mm / 24h";
+      helperEl.textContent = "Click any location to inspect the forecast.";
+      break;
   }
 }
 
@@ -368,6 +429,7 @@ function setupEventListeners() {
         imdBanner.classList.toggle("hidden", state.activeLayer !== "imd");
       }
       
+      updateMapContextBadge();
       renderGrid();
       updateLegend();
     });
@@ -386,6 +448,7 @@ function setupEventListeners() {
       btn.classList.add("active");
       state.threeMode = btn.dataset["3dmode"] || btn.getAttribute("data-3dmode");
       update3DNoticeBanner();
+      updateMapContextBadge();
       if (state.threeViewer && state.currentGridData) {
         state.threeViewer.renderData(
           state.currentGridData,
@@ -622,31 +685,85 @@ function updateDomainStats(data) {
   const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   const dateFormatted = `${String(d.getUTCDate()).padStart(2, "0")} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
   
-  document.getElementById("summary-date-badge").textContent = dateFormatted;
-  document.getElementById("summary-region-label").textContent = state.activeRegion === "All"
+  const dateBadge = document.getElementById("summary-date-badge");
+  if (dateBadge) dateBadge.textContent = dateFormatted;
+  const regionLabel = document.getElementById("summary-region-label");
+  if (regionLabel) regionLabel.textContent = state.activeRegion === "All"
     ? `AP & Telangana Domain (${total} Cells)`
     : `${state.activeRegion} (${total} Cells)`;
 
-  document.getElementById("val-domain-mean").textContent = meanFused;
-  document.getElementById("val-domain-max").textContent = `${maxFused} mm`;
-  document.getElementById("val-domain-max-loc").textContent = peakLoc;
-  document.getElementById("val-domain-dis").textContent = meanD;
-  document.getElementById("val-domain-warn").textContent = `${lowPct}%`;
+  const elMean = document.getElementById("val-domain-mean");
+  if (elMean) elMean.textContent = meanFused;
+  const elMax = document.getElementById("val-domain-max");
+  if (elMax) elMax.textContent = `${maxFused} mm`;
+  const elMaxLoc = document.getElementById("val-domain-max-loc");
+  if (elMaxLoc) elMaxLoc.textContent = peakLoc;
+  const elDis = document.getElementById("val-domain-dis");
+  if (elDis) elDis.textContent = meanD;
+  const elWarn = document.getElementById("val-domain-warn");
+  if (elWarn) elWarn.textContent = `${lowPct}%`;
 
-  // Pipeline summary readings
-  document.getElementById("summary-gfs-val").textContent = `${meanGfs} mm`;
-  document.getElementById("summary-ecmwf-val").textContent = `${meanEcmwf} mm`;
-  document.getElementById("summary-fused-val").textContent = `${meanFused} mm`;
-  document.getElementById("summary-dis-val").textContent = `${meanD} mm`;
+  // Pipeline summary readings (if legacy elements exist)
+  const sumGfs = document.getElementById("summary-gfs-val");
+  if (sumGfs) sumGfs.textContent = `${meanGfs} mm`;
+  const sumEcmwf = document.getElementById("summary-ecmwf-val");
+  if (sumEcmwf) sumEcmwf.textContent = `${meanEcmwf} mm`;
+  const sumFused = document.getElementById("summary-fused-val");
+  if (sumFused) sumFused.textContent = `${meanFused} mm`;
+  const sumDis = document.getElementById("summary-dis-val");
+  if (sumDis) sumDis.textContent = `${meanD} mm`;
 
   // Confidence distribution
-  document.getElementById("bar-seg-high").style.width = `${highPct}%`;
-  document.getElementById("bar-seg-mod").style.width = `${modPct}%`;
-  document.getElementById("bar-seg-low").style.width = `${lowPct}%`;
+  const barHigh = document.getElementById("bar-seg-high");
+  if (barHigh) barHigh.style.width = `${highPct}%`;
+  const barMod = document.getElementById("bar-seg-mod");
+  if (barMod) barMod.style.width = `${modPct}%`;
+  const barLow = document.getElementById("bar-seg-low");
+  if (barLow) barLow.style.width = `${lowPct}%`;
 
-  document.getElementById("pct-high").textContent = `${highPct}%`;
-  document.getElementById("pct-mod").textContent = `${modPct}%`;
-  document.getElementById("pct-low").textContent = `${lowPct}%`;
+  const pctHigh = document.getElementById("pct-high");
+  if (pctHigh) pctHigh.textContent = `${highPct}%`;
+  const pctMod = document.getElementById("pct-mod");
+  if (pctMod) pctMod.textContent = `${modPct}%`;
+  const pctLow = document.getElementById("pct-low");
+  if (pctLow) pctLow.textContent = `${lowPct}%`;
+
+  // ── Forecast Explanation Strip (Section 5) ──
+  const stripFused = document.getElementById("strip-fused-val");
+  if (stripFused) stripFused.textContent = meanFused;
+  const stripGfs = document.getElementById("strip-gfs-val");
+  if (stripGfs) stripGfs.textContent = meanGfs;
+  const stripEcmwf = document.getElementById("strip-ecmwf-val");
+  if (stripEcmwf) stripEcmwf.textContent = meanEcmwf;
+  const stripDis = document.getElementById("strip-dis-val");
+  if (stripDis) stripDis.textContent = meanD;
+
+  const stripConfBadge = document.getElementById("strip-conf-badge");
+  const stripConfVal = document.getElementById("strip-conf-val");
+  const stripConfSub = document.getElementById("strip-conf-sub");
+  const stripDateBadge = document.getElementById("strip-date-badge");
+  if (stripDateBadge) stripDateBadge.textContent = dateFormatted;
+
+  let dominantConfClass = "conf-high";
+  let dominantConfText = "HIGH";
+  let dominantSub = `${highPct}% High Confidence`;
+  if (parseFloat(lowPct) >= parseFloat(highPct) && parseFloat(lowPct) >= parseFloat(modPct)) {
+    dominantConfClass = "conf-low";
+    dominantConfText = "LOW";
+    dominantSub = `${lowPct}% Low Confidence`;
+  } else if (parseFloat(modPct) >= parseFloat(highPct)) {
+    dominantConfClass = "conf-mod";
+    dominantConfText = "MODERATE";
+    dominantSub = `${modPct}% Moderate Confidence`;
+  }
+
+  if (stripConfBadge) {
+    stripConfBadge.className = `s-conf-badge ${dominantConfClass}`;
+  }
+  if (stripConfVal) stripConfVal.textContent = dominantConfText;
+  if (stripConfSub) stripConfSub.textContent = dominantSub;
+
+  updateMapContextBadge();
 
   // ── UI ENHANCEMENT v2: Update new intelligence panels ──
   updateIntelHero(meanFused, highPct, modPct, lowPct, data);
@@ -675,16 +792,6 @@ function updateIntelHero(meanFused, highPct, modPct, lowPct, data) {
     badge.querySelector(".intel-conf-dot").style.background = "currentColor";
   }
   if (text) text.textContent = confLabel;
-
-  // Season detection from date
-  if (data && data.forecast_date) {
-    const month = parseInt(data.forecast_date.split("-")[1], 10);
-    const season = month >= 6 && month <= 9 ? "SW Monsoon" : month >= 10 && month <= 11 ? "NE Monsoon" : "Pre-Monsoon";
-    const ctxSeason = document.getElementById("mw-ctx-season");
-    if (ctxSeason) ctxSeason.textContent = season;
-    const ctxSeason2 = document.getElementById("wpage-ctx-season");
-    if (ctxSeason2) ctxSeason2.textContent = season;
-  }
 
   // Why-Fused dynamic text
   const whyText = document.getElementById("why-fused-text");
@@ -916,7 +1023,7 @@ function renderGrid() {
     });
 
     // Meteorological tooltip
-    let layerValText = `<strong>${pt.fused_mm} mm</strong> (50/50 Fused)`;
+    let layerValText = `<strong>${pt.fused_mm} mm</strong> (Equal-Weight Fused)`;
     if (state.activeLayer === "gfs") layerValText = `<strong>${pt.gfs_mm} mm</strong> (NOAA GFS)`;
     else if (state.activeLayer === "ecmwf") layerValText = `<strong>${pt.ecmwf_mm} mm</strong> (ECMWF IFS)`;
     else if (state.activeLayer === "disagreement") layerValText = `<strong>${pt.disagreement_mm} mm</strong> (Spread D)`;
@@ -1036,11 +1143,11 @@ function updateLegend() {
 
   // 2D Map Legend
   const layer = state.activeLayer;
-  let title = "50/50 FUSED FORECAST (MM)";
+  let title = "EQUAL-WEIGHT FUSION (50% GFS + 50% ECMWF)";
   let items = [];
 
   if (layer === "fused") {
-    title = "50/50 Fused Rainfall (mm)";
+    title = "EQUAL-WEIGHT FUSION (50% GFS + 50% ECMWF)";
     items = PALETTES.rain;
   } else if (layer === "gfs") {
     title = "NOAA GFS Forecast (mm)";
@@ -1049,13 +1156,13 @@ function updateLegend() {
     title = "ECMWF IFS Forecast (mm)";
     items = PALETTES.rain;
   } else if (layer === "imd") {
-    title = "IMD Retrospective Obs (mm)";
+    title = "IMD Retrospective Observation (mm)";
     items = PALETTES.rain;
   } else if (layer === "confidence") {
-    title = "Empirical Confidence";
+    title = "EMPIRICAL CONFIDENCE REGIMES";
     items = PALETTES.confidence.map((c) => ({ color: c.color, label: c.label }));
   } else if (layer === "disagreement") {
-    title = "Model Disagreement D (mm)";
+    title = "MODEL DISAGREEMENT D = |GFS − ECMWF| (mm)";
     items = PALETTES.disagreement;
   }
 
@@ -1123,64 +1230,78 @@ function inspectCell(pt) {
   document.getElementById("inspect-fused-val").textContent = pt.fused_mm.toFixed(2);
   document.getElementById("inspect-regime-tag").textContent = pt.predicted_regime || "Rainfall";
 
-  // Confidence Banner
+  // Confidence Banner & Categorization (Sections 7, 8, 9)
   const banner = document.getElementById("inspect-conf-banner");
-  banner.className = "confidence-status-banner";
+  const titleEl = document.getElementById("inspect-conf-title");
+  const subtextEl = document.getElementById("inspect-conf-subtext");
   
+  let regimeRange = "D < 0.11 mm";
+  let histMae = "2.02 mm";
+  let whyExplanation = "";
+
   if (pt.confidence_class === "High Confidence") {
-    banner.classList.add("conf-banner-high");
-    document.getElementById("inspect-conf-title").textContent = "HIGH CONFIDENCE";
-    document.getElementById("inspect-conf-sub").textContent = "Strong Model Consensus";
+    if (banner) banner.className = "confidence-status-banner conf-banner-high";
+    if (titleEl) titleEl.textContent = "HIGH CONFIDENCE";
+    if (subtextEl) subtextEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
+    regimeRange = "D < 0.11 mm";
+    histMae = "2.02 mm";
+    whyExplanation = `GFS (${pt.gfs_mm.toFixed(2)} mm) and ECMWF (${pt.ecmwf_mm.toFixed(2)} mm) are in close consensus for this cell (${pt.disagreement_mm.toFixed(2)} mm disagreement). Historical evaluation found that smaller model disagreement was associated with smaller forecast error magnitude.`;
   } else if (pt.confidence_class === "Moderate Confidence") {
-    banner.classList.add("conf-banner-mod");
-    document.getElementById("inspect-conf-title").textContent = "MODERATE CONFIDENCE";
-    document.getElementById("inspect-conf-sub").textContent = "Moderate Model Spread";
+    if (banner) banner.className = "confidence-status-banner conf-banner-mod";
+    if (titleEl) titleEl.textContent = "MODERATE CONFIDENCE";
+    if (subtextEl) subtextEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
+    regimeRange = "0.11 ≤ D < 2.06 mm";
+    histMae = "3.75 mm";
+    whyExplanation = `GFS (${pt.gfs_mm.toFixed(2)} mm) and ECMWF (${pt.ecmwf_mm.toFixed(2)} mm) exhibit moderate difference for this cell (${pt.disagreement_mm.toFixed(2)} mm disagreement). Historical evaluation found that moderate model disagreement was associated with intermediate forecast error magnitude.`;
   } else {
-    banner.classList.add("conf-banner-low");
-    document.getElementById("inspect-conf-title").textContent = "LOW CONFIDENCE";
-    document.getElementById("inspect-conf-sub").textContent = "Substantial Model Disagreement";
+    if (banner) banner.className = "confidence-status-banner conf-banner-low";
+    if (titleEl) titleEl.textContent = "LOW CONFIDENCE";
+    if (subtextEl) subtextEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
+    regimeRange = "D ≥ 2.06 mm";
+    histMae = "9.46 mm";
+    whyExplanation = `GFS (${pt.gfs_mm.toFixed(2)} mm) and ECMWF (${pt.ecmwf_mm.toFixed(2)} mm) differ substantially for this cell (${pt.disagreement_mm.toFixed(2)} mm disagreement). Historical evaluation found that larger model disagreement was associated with larger forecast error magnitude.`;
   }
 
-  document.getElementById("inspect-banner-d").textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
-  document.getElementById("inspect-banner-mae").textContent = `${pt.expected_mae_mm.toFixed(2)} mm`;
-
-  // Pipeline Flow Chips
-  document.getElementById("inspect-gfs-val").textContent = `${pt.gfs_mm.toFixed(2)} mm`;
-  document.getElementById("inspect-ecmwf-val").textContent = `${pt.ecmwf_mm.toFixed(2)} mm`;
-  document.getElementById("inspect-compare-fused").textContent = `${pt.fused_mm.toFixed(2)} mm`;
-
-  // Model Comparison Grid
-  document.getElementById("card-gfs-val").textContent = `${pt.gfs_mm.toFixed(2)} mm`;
-  document.getElementById("card-ecmwf-val").textContent = `${pt.ecmwf_mm.toFixed(2)} mm`;
-  document.getElementById("card-fused-val").textContent = `${pt.fused_mm.toFixed(2)} mm`;
-  document.getElementById("bar-diff-tag").textContent = `Spread D: ${pt.disagreement_mm.toFixed(2)} mm`;
-
-  // Range Bar Marker Positioning (Normalized min/max)
-  const allVals = [pt.gfs_mm, pt.ecmwf_mm, pt.fused_mm];
-  const maxSpread = Math.max(...allVals, 5.0);
-  const minSpread = Math.max(0, Math.min(...allVals) - 2.0);
-  const axisMax = Math.ceil(maxSpread * 1.2);
-
-  document.getElementById("pin-lbl-min").textContent = `${minSpread.toFixed(0)} mm`;
-  document.getElementById("pin-lbl-max").textContent = `${axisMax.toFixed(0)} mm`;
-
-  const getPos = (v) => Math.min(95, Math.max(5, ((v - minSpread) / (axisMax - minSpread)) * 100));
-
-  const pinGfs = document.getElementById("pin-gfs");
-  const pinEcmwf = document.getElementById("pin-ecmwf");
-  const pinFused = document.getElementById("pin-fused");
-
-  pinGfs.style.left = `${getPos(pt.gfs_mm)}%`;
-  pinEcmwf.style.left = `${getPos(pt.ecmwf_mm)}%`;
-  pinFused.style.left = `${getPos(pt.fused_mm)}%`;
-
-  // Why This Confidence? Plain-Language Explanation
+  // Why This Confidence? Plain-Language Explanation (Section 8)
   const whyBody = document.getElementById("inspect-why-body");
-  whyBody.innerHTML = `
-    NOAA GFS (<strong>${pt.gfs_mm.toFixed(2)} mm</strong>) and ECMWF IFS (<strong>${pt.ecmwf_mm.toFixed(2)} mm</strong>) differ by <strong>${pt.disagreement_mm.toFixed(2)} mm</strong>. 
-    Historical evaluation found a positive association between model disagreement and forecast error magnitude (&rho; = 0.584). 
-    In this disagreement regime, the historical Mean Absolute Error against IMD retrospective observations is <strong>${pt.expected_mae_mm.toFixed(2)} mm</strong>.
-  `;
+  if (whyBody) whyBody.textContent = whyExplanation;
+
+  // Historical Evidence Grid (Section 9)
+  const evD = document.getElementById("inspect-evidence-d");
+  if (evD) evD.textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
+  const evRegime = document.getElementById("inspect-evidence-regime");
+  if (evRegime) evRegime.textContent = regimeRange;
+  const evMae = document.getElementById("inspect-evidence-mae");
+  if (evMae) evMae.textContent = histMae;
+
+  // Visual Model Comparison Bars (Section 11)
+  const maxModelVal = Math.max(pt.gfs_mm, pt.ecmwf_mm, pt.fused_mm, 0.1);
+  const barGfs = document.getElementById("inspect-vbar-gfs");
+  const barEcmwf = document.getElementById("inspect-vbar-ecmwf");
+  const barFused = document.getElementById("inspect-vbar-fused");
+  if (barGfs) barGfs.style.width = `${Math.max(4, Math.min(100, (pt.gfs_mm / maxModelVal) * 100))}%`;
+  if (barEcmwf) barEcmwf.style.width = `${Math.max(4, Math.min(100, (pt.ecmwf_mm / maxModelVal) * 100))}%`;
+  if (barFused) barFused.style.width = `${Math.max(4, Math.min(100, (pt.fused_mm / maxModelVal) * 100))}%`;
+
+  const vvalGfs = document.getElementById("inspect-gfs-val");
+  if (vvalGfs) vvalGfs.textContent = `${pt.gfs_mm.toFixed(2)} mm`;
+  const vvalEcmwf = document.getElementById("inspect-ecmwf-val");
+  if (vvalEcmwf) vvalEcmwf.textContent = `${pt.ecmwf_mm.toFixed(2)} mm`;
+  const vvalFused = document.getElementById("inspect-compare-fused");
+  if (vvalFused) vvalFused.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+
+  const diffTag = document.getElementById("bar-diff-tag");
+  if (diffTag) diffTag.textContent = `Spread D: ${pt.disagreement_mm.toFixed(2)} mm`;
+
+  // Discrete Model Readings Grid
+  const cardGfs = document.getElementById("card-gfs-val");
+  if (cardGfs) cardGfs.textContent = `${pt.gfs_mm.toFixed(2)} mm`;
+  const cardEcmwf = document.getElementById("card-ecmwf-val");
+  if (cardEcmwf) cardEcmwf.textContent = `${pt.ecmwf_mm.toFixed(2)} mm`;
+  const cardFused = document.getElementById("card-fused-val");
+  if (cardFused) cardFused.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+  const cardDis = document.getElementById("card-dis-val");
+  if (cardDis) cardDis.textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
 
   // Retrospective IMD Verification Audit
   const verifSection = document.getElementById("inspect-verification-section");

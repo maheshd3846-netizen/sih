@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AERIS — Adaptive Weather Intelligence</title>
-  <meta name="description" content="AERIS: Operational AI–NWP hybrid weather intelligence platform. Multi-model precipitation fusion combining NOAA GFS and ECMWF IFS with calibrated confidence and retrospective IMD verification.">
+  <title>SIH26081 — Multi-Model Meteorological Consensus Workstation</title>
+  <meta name="description" content="SIH26081: Operational meteorological workstation. Multi-model precipitation fusion combining NOAA GFS and ECMWF IFS with empirical confidence calibration and retrospective IMD verification.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%2308101e'/%3E%3Cpath d='M5 17 C6 10 11 6.5 18 6.5 C21.5 6.5 23.5 8 24 10.5' stroke='%2338bdf8' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M23 11 C22 18 17 21.5 10 21.5 C6.5 21.5 4.5 20 4 17.5' stroke='%232dd4bf' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='14' cy='14' r='2.5' fill='%2338bdf8'/%3E%3C/svg%3E">
   
   <!-- Google Fonts: Inter & JetBrains Mono -->
@@ -27,9 +27,9 @@
          Hierarchy: Brand -> Date -> Region -> Nav -> Utilities
          ======================================================== -->
     <header class="app-command-header" role="banner">
-      <!-- 1. AERIS Product Identity -->
+      <!-- 1. SIH26081 Meteorological Workstation Identity -->
       <div class="header-brand-block">
-        <div class="aeris-logo-mark" aria-label="AERIS Symbol" title="AERIS Adaptive Weather Intelligence">
+        <div class="aeris-logo-mark" aria-label="SIH26081 Symbol" title="SIH26081 Meteorological Consensus Workstation">
           <svg class="aeris-symbol" viewBox="0 0 28 28" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="aerisFlow1" x1="4" y1="6" x2="24" y2="22" gradientUnits="userSpaceOnUse">
@@ -58,8 +58,12 @@
           </svg>
         </div>
         <div class="brand-titles">
-          <h1 class="brand-main-title">AERIS</h1>
-          <span class="brand-sub-title">Adaptive Weather Intelligence</span>
+          <h1 class="brand-main-title">SIH26081</h1>
+          <span class="brand-sub-title">Multi-Model NWP Consensus</span>
+        </div>
+        <div class="header-retro-badge" title="Current prototype demonstrates the validated historical workflow; it is not a live 2026 forecast feed.">
+          <span class="retro-dot"></span>
+          <span class="retro-text">RETROSPECTIVE DEMONSTRATION &bull; JUN&ndash;AUG 2024</span>
         </div>
       </div>
 
@@ -94,12 +98,6 @@
         </button>
         <button class="nav-tab" data-view="verification" id="tab-verification">
           <span class="tab-label">Verification</span>
-        </button>
-        <button class="nav-tab" data-view="weights" id="tab-weights" title="Adaptive Model Weights &amp; Contribution Analysis">
-          <span class="tab-label">Model Weights</span>
-        </button>
-        <button class="nav-tab" data-view="extreme" id="tab-extreme" title="Extreme Weather Event Signals">
-          <span class="tab-label">Extreme Events</span>
         </button>
         <button class="nav-tab nav-tab-prominent" data-view="methodology" id="tab-methodology">
           <span class="tab-label">Methodology</span>
@@ -164,9 +162,10 @@
                 <div class="layer-btn-group group-forecast">
                   <span class="layer-group-label">FORECAST</span>
                   <div class="group-pills">
-                    <button class="layer-tab active" data-layer="fused" id="layer-btn-fused" title="50/50 Equal-Weight Ensemble Forecast">
+                    <button class="layer-tab active" data-layer="fused" id="layer-btn-fused" title="Both forecast models contribute equally to the final rainfall estimate.">
                       <span class="layer-bullet bullet-fused"></span>
-                      <span>50/50 Fused</span>
+                      <span class="tab-title">EQUAL-WEIGHT FUSION</span>
+                      <span class="tab-sub">50% GFS + 50% ECMWF</span>
                     </button>
                     <button class="layer-tab" data-layer="gfs" id="layer-btn-gfs" title="NOAA Global Forecast System (0.25° APCP)">
                       <span class="layer-bullet bullet-gfs"></span>
@@ -183,11 +182,11 @@
                 <div class="layer-btn-group group-analysis">
                   <span class="layer-group-label">ANALYSIS</span>
                   <div class="group-pills">
-                    <button class="layer-tab" data-layer="confidence" id="layer-btn-confidence" title="Empirical Disagreement Confidence Classes">
+                    <button class="layer-tab" data-layer="confidence" id="layer-btn-confidence" title="Historical error regime linked to current model disagreement">
                       <span class="layer-bullet bullet-conf"></span>
-                      <span>Confidence</span>
+                      <span>Empirical Confidence</span>
                     </button>
-                    <button class="layer-tab" data-layer="disagreement" id="layer-btn-disagreement" title="Model Disagreement D = |GFS - ECMWF|">
+                    <button class="layer-tab" data-layer="disagreement" id="layer-btn-disagreement" title="Model Disagreement D = |GFS − ECMWF| (mm). Absolute difference between models.">
                       <span class="layer-bullet bullet-dis"></span>
                       <span>Disagreement (D)</span>
                     </button>
@@ -198,7 +197,7 @@
                 <div class="layer-btn-group group-verification">
                   <span class="layer-group-label">VERIFICATION</span>
                   <div class="group-pills">
-                    <button class="layer-tab" data-layer="imd" id="layer-btn-imd" title="IMD 0.25° Gridded Rainfall Observation Audit">
+                    <button class="layer-tab" data-layer="imd" id="layer-btn-imd" title="Observed rainfall used for historical verification (IMD 0.25° NCC Pune)">
                       <span class="layer-bullet bullet-imd"></span>
                       <span>IMD Retrospective</span>
                     </button>
@@ -212,11 +211,11 @@
                 <div class="layer-btn-group group-3d-var">
                   <span class="layer-group-label">3D VARIABLE</span>
                   <div class="group-pills">
-                    <button class="layer-tab active" data-3dmode="rain" id="btn-3d-rain" title="Vertical Height = P_fused (Forecast rainfall mm / 24h)">
+                    <button class="layer-tab active" data-3dmode="rain" id="btn-3d-rain" title="Vertical Height = forecast rainfall (mm / 24h) &bull; Color = rainfall intensity">
                       <span class="layer-bullet bullet-3d-rain"></span>
                       <span>RAIN</span>
                     </button>
-                    <button class="layer-tab" data-3dmode="disagreement" id="btn-3d-disagreement" title="Vertical Height = Model Disagreement D = |GFS - ECMWF| (mm)">
+                    <button class="layer-tab" data-3dmode="disagreement" id="btn-3d-disagreement" title="Vertical Height = |GFS − ECMWF| (mm) &bull; Color = disagreement intensity">
                       <span class="layer-bullet bullet-3d-dis"></span>
                       <span>DISAGREEMENT</span>
                     </button>
@@ -247,9 +246,20 @@
 
             </div>
 
+            <!-- Floating Map Context Badge & First-Use Helper -->
+            <div class="map-context-badge" id="map-context-badge" role="status" aria-live="polite">
+              <div class="map-context-head">
+                <span class="map-context-title" id="map-context-title">24-HOUR RAINFALL FORECAST</span>
+                <span class="map-context-unit" id="map-context-unit">mm / 24h</span>
+              </div>
+              <div class="map-context-helper" id="map-context-helper">
+                Click any location to inspect the forecast.
+              </div>
+            </div>
+
             <!-- Prominent IMD Verification Mode Banner (shown only when IMD layer active) -->
             <div class="imd-mode-banner hidden" id="imd-mode-banner" role="status">
-              <span class="banner-live-dot"></span>
+              <span class="banner-status-dot"></span>
               <span class="banner-title-text">IMD RETROSPECTIVE VERIFICATION</span>
               <span class="banner-sep">•</span>
               <span class="banner-detail-text">HISTORICAL OBSERVATION</span>
@@ -345,31 +355,63 @@
                 <span class="panel-date-badge" id="summary-date-badge">15 JUL 2024</span>
               </div>
 
-              <!-- INTELLIGENCE HERO SUMMARY BAR -->
-              <div class="intel-hero-bar" id="intel-hero-bar">
-                <div class="intel-hero-fused">
-                  <span class="intel-hero-label">&#9889; HYBRID FORECAST — 24H RAINFALL</span>
-                  <div class="intel-hero-value">
-                    <span class="intel-hero-num" id="hero-fused-val">--</span>
-                    <span class="intel-hero-unit">mm</span>
+              <!-- FORECAST EXPLANATION STRIP (Section 5) -->
+              <div class="forecast-explanation-strip" id="forecast-explanation-strip">
+                <div class="strip-header">
+                  <div class="strip-title-group">
+                    <span class="strip-kicker">WORKSTATION CONSENSUS</span>
+                    <h2 class="strip-headline">24-HOUR RAINFALL FORECAST</h2>
+                    <p class="strip-subtext">Combining NOAA GFS and ECMWF IFS into one equal-weight forecast.</p>
                   </div>
-                  <span class="intel-hero-sub">Domain Mean &bull; 00 UTC Cycle +24h Lead</span>
+                  <span class="strip-date-badge" id="strip-date-badge">15 JUL 2024</span>
                 </div>
-                <div class="intel-hero-right">
-                  <span class="intel-hero-label">CONFIDENCE</span>
-                  <span class="intel-conf-badge conf-high" id="hero-conf-badge">
-                    <span class="intel-conf-dot"></span>
-                    <span id="hero-conf-text">--</span>
-                  </span>
-                  <span class="intel-hero-label" style="margin-top:4px">MODEL BLEND</span>
-                  <span style="font-family:var(--font-mono);font-size:0.62rem;color:#94a3b8;">GFS 50% &bull; ECMWF 50%</span>
+
+                <div class="strip-values-grid">
+                  <div class="strip-val-card strip-fused" title="Both forecast models contribute equally to the final rainfall estimate.">
+                    <span class="s-k">FUSED FORECAST</span>
+                    <div class="s-v-row">
+                      <span class="s-num" id="strip-fused-val">--</span>
+                      <span class="s-unit">mm</span>
+                    </div>
+                    <span class="s-sub">Domain Mean</span>
+                  </div>
+                  <div class="strip-val-card" title="NOAA Global Forecast System (0.25° APCP)">
+                    <span class="s-k">GFS</span>
+                    <div class="s-v-row">
+                      <span class="s-num" id="strip-gfs-val">--</span>
+                      <span class="s-unit">mm</span>
+                    </div>
+                    <span class="s-sub">0.25° APCP</span>
+                  </div>
+                  <div class="strip-val-card" title="ECMWF Integrated Forecasting System (0.25° tp)">
+                    <span class="s-k">ECMWF</span>
+                    <div class="s-v-row">
+                      <span class="s-num" id="strip-ecmwf-val">--</span>
+                      <span class="s-unit">mm</span>
+                    </div>
+                    <span class="s-sub">0.25° tp</span>
+                  </div>
+                  <div class="strip-val-card strip-dis" title="Absolute difference between models: D = |GFS − ECMWF|">
+                    <span class="s-k">MODEL DISAGREEMENT</span>
+                    <div class="s-v-row">
+                      <span class="s-num" id="strip-dis-val">--</span>
+                      <span class="s-unit">mm</span>
+                    </div>
+                    <span class="s-sub">Mean |GFS − ECMWF|</span>
+                  </div>
+                  <div class="strip-val-card strip-conf" title="Confidence is based on historical model disagreement and observed forecast error.">
+                    <span class="s-k">EMPIRICAL CONFIDENCE</span>
+                    <div class="s-conf-badge conf-high" id="strip-conf-badge">
+                      <span class="s-conf-dot"></span>
+                      <span id="strip-conf-val">--</span>
+                    </div>
+                    <span class="s-sub" id="strip-conf-sub">Historical error regime</span>
+                  </div>
                 </div>
               </div>
 
               <!-- Primary Forecast & Consensus Metrics -->
               <div class="summary-key-metrics">
-                
-                <!-- Main Forecast Card -->
                 <div class="metric-card metric-primary">
                   <span class="m-kicker">24-HOUR DOMAIN MEAN</span>
                   <div class="m-hero-val">
@@ -383,7 +425,6 @@
                   </div>
                 </div>
 
-                <!-- Consensus & Disagreement -->
                 <div class="metric-card metric-consensus">
                   <span class="m-kicker">MODEL DISAGREEMENT (D)</span>
                   <div class="m-hero-val">
@@ -398,11 +439,14 @@
                 </div>
               </div>
 
-              <!-- ADAPTIVE MODEL WEIGHTS CARD -->
+              <!-- EQUAL-WEIGHT FUSION CARD (Sections 6 & 11) -->
               <div class="model-weights-card">
                 <div class="mw-header">
-                  <span class="mw-title">&#9881; ADAPTIVE MODEL WEIGHTS</span>
-                  <button class="btn-why-weights" id="btn-why-weights" title="Understand why these model contributions are used">&#128161; Why these weights?</button>
+                  <div>
+                    <span class="mw-title">&#9881; EQUAL-WEIGHT FUSION</span>
+                    <span class="mw-subtitle">50% GFS + 50% ECMWF</span>
+                  </div>
+                  <button class="btn-why-weights" id="btn-why-weights" title="Both forecast models contribute equally to the final rainfall estimate.">&#128161; Why equal weights?</button>
                 </div>
                 <div class="mw-body">
                   <div class="mw-model-row">
@@ -418,7 +462,7 @@
                     <span class="mw-val-label" id="mw-val-ecmwf">-- mm</span>
                   </div>
                   <div class="mw-model-row">
-                    <span class="mw-model-name name-fused">50/50 FUSED</span>
+                    <span class="mw-model-name name-fused">EQUAL-WEIGHT FUSION</span>
                     <div class="mw-bar-track"><div class="mw-bar-fill fill-fused" id="mw-bar-fused" style="width:100%"></div></div>
                     <span class="mw-pct-label" style="color:#0d9488">100%</span>
                     <span class="mw-val-label" id="mw-val-fused-w">-- mm</span>
@@ -433,12 +477,12 @@
                       <span class="mw-ctx-val">+24h</span>
                     </div>
                     <div class="mw-ctx-item">
-                      <span class="mw-ctx-key">Season</span>
-                      <span class="mw-ctx-val" id="mw-ctx-season">--</span>
+                      <span class="mw-ctx-key">Period</span>
+                      <span class="mw-ctx-val">Jun&ndash;Aug 2024</span>
                     </div>
                     <div class="mw-ctx-item">
                       <span class="mw-ctx-key">Strategy</span>
-                      <span class="mw-ctx-val">Equal-Weight</span>
+                      <span class="mw-ctx-val">Equal-Weight Centroid</span>
                     </div>
                   </div>
                 </div>
@@ -447,51 +491,20 @@
               <!-- WHY-FUSED INSIGHT PANEL -->
               <div class="why-fused-card" id="why-fused-card">
                 <div class="why-fused-title">&#128172; WHY THIS FORECAST?</div>
-                <span id="why-fused-text">Multiple NWP sources were combined using a validated 50/50 equal-weight ensemble. The fused forecast reflects the centroid of GFS and ECMWF predictions. Model disagreement D determines the empirical confidence class for this forecast situation.</span>
+                <span id="why-fused-text">NOAA GFS and ECMWF IFS predictions are combined into one equal-weight forecast. The fused rainfall estimate represents the centroid of both models. Inter-model disagreement D determines the empirical confidence class for each location.</span>
               </div>
 
-              <!-- Compact Operational Fusion Pipeline -->
-              <div class="fusion-pipeline-box">
-                <div class="pipeline-header">
-                  <span class="pipeline-title">OPERATIONAL FUSION ARCHITECTURE</span>
-                  <span class="pipeline-tag">Equal-Weight Centroid</span>
-                </div>
-                
-                <div class="pipeline-diagram">
-                  <div class="pipe-col pipe-inputs">
-                    <div class="pipe-node node-gfs">
-                      <span class="node-src">NOAA GFS</span>
-                      <span class="node-val" id="summary-gfs-val">-- mm</span>
-                    </div>
-                    <div class="pipe-node node-ecmwf">
-                      <span class="node-src">ECMWF IFS</span>
-                      <span class="node-val" id="summary-ecmwf-val">-- mm</span>
-                    </div>
-                  </div>
-
-                  <div class="pipe-col pipe-arrows">
-                    <span class="pipe-arrow">↘</span>
-                    <span class="pipe-arrow">↗</span>
-                  </div>
-
-                  <div class="pipe-col pipe-fusion">
-                    <div class="pipe-node node-fused">
-                      <span class="node-src">50/50 FUSION</span>
-                      <span class="node-val" id="summary-fused-val">-- mm</span>
-                    </div>
-                    <div class="pipe-divergence">
-                      <span class="div-label">Disagreement (D)</span>
-                      <span class="div-val" id="summary-dis-val">-- mm</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Explainable Confidence Breakdown -->
+              <!-- EMPIRICAL CONFIDENCE REGIMES (Sections 7, 8, 9) -->
               <div class="confidence-summary-box">
                 <div class="conf-box-header">
-                  <span class="conf-box-title">EMPIRICAL CONFIDENCE REGIMES</span>
-                  <span class="conf-box-sub">72,772 Monsoon Calibration Samples</span>
+                  <div>
+                    <span class="conf-box-title">EMPIRICAL CONFIDENCE REGIMES</span>
+                    <span class="conf-box-sub">72,772 Monsoon Calibration Samples</span>
+                  </div>
+                </div>
+                <p class="conf-lead-expl">Confidence is based on historical model disagreement and observed forecast error.</p>
+                <div class="conf-info-callout" title="This is not a probability. It describes the historical error regime associated with the current model disagreement.">
+                  <span class="info-icon">ℹ</span> This is not a probability. It describes the historical error regime associated with the current model disagreement.
                 </div>
 
                 <!-- Three Clean Regime Rows -->
@@ -541,35 +554,39 @@
                 </div>
               </div>
 
-              <!-- EXTREME WEATHER GUIDANCE -->
-              <div class="extreme-events-card">
-                <div class="ee-header">
-                  <span class="ee-title">&#9889; EXTREME WEATHER GUIDANCE</span>
+              <!-- HOW IT WORKS MICROFLOW (Section 15) -->
+              <div class="how-it-works-microflow">
+                <div class="microflow-header">
+                  <span class="microflow-title">HOW IT WORKS</span>
+                  <span class="microflow-tag">Operational Flow</span>
                 </div>
-                <div class="ee-body" id="ee-body">
-                  <div class="ee-signal-row" id="ee-rainfall-row">
-                    <span class="ee-icon">&#127783;&#65039;</span>
-                    <div class="ee-info">
-                      <div class="ee-event-name">HEAVY RAINFALL</div>
-                      <div class="ee-event-sub" id="ee-rainfall-sub">Checking forecast signal...</div>
+                <div class="microflow-steps">
+                  <div class="mf-step mf-models">
+                    <span class="mf-step-tag">1. INPUTS</span>
+                    <div class="mf-models-row">
+                      <span class="mf-pill mf-gfs">NOAA GFS</span>
+                      <span class="mf-plus">+</span>
+                      <span class="mf-pill mf-ecmwf">ECMWF IFS</span>
                     </div>
-                    <span class="ee-risk-badge ee-risk-na" id="ee-rainfall-risk">--</span>
+                    <span class="mf-desc">Independent NWP models</span>
                   </div>
-                  <div class="ee-signal-row">
-                    <span class="ee-icon">&#127790;&#65039;</span>
-                    <div class="ee-info">
-                      <div class="ee-event-name">HEAT WAVE</div>
-                      <div class="ee-event-sub">Temperature signal — Data unavailable</div>
-                    </div>
-                    <span class="ee-risk-badge ee-risk-na">No signal</span>
+                  <span class="mf-arrow">↓</span>
+                  <div class="mf-step mf-fusion">
+                    <span class="mf-step-tag">2. COMBINATION</span>
+                    <strong class="mf-bold">EQUAL-WEIGHT FUSION</strong>
+                    <span class="mf-desc">50% GFS + 50% ECMWF</span>
                   </div>
-                  <div class="ee-signal-row">
-                    <span class="ee-icon">&#128168;</span>
-                    <div class="ee-info">
-                      <div class="ee-event-name">HIGH WIND</div>
-                      <div class="ee-event-sub">Wind speed signal — Data unavailable</div>
-                    </div>
-                    <span class="ee-risk-badge ee-risk-na">No signal</span>
+                  <span class="mf-arrow">↓</span>
+                  <div class="mf-step mf-dis">
+                    <span class="mf-step-tag">3. DIAGNOSTIC</span>
+                    <strong class="mf-bold">MODEL DISAGREEMENT</strong>
+                    <span class="mf-desc">D = |GFS − ECMWF|</span>
+                  </div>
+                  <span class="mf-arrow">↓</span>
+                  <div class="mf-step mf-conf">
+                    <span class="mf-step-tag">4. CALIBRATION</span>
+                    <strong class="mf-bold">EMPIRICAL CONFIDENCE</strong>
+                    <span class="mf-desc">Historical Error Evidence</span>
                   </div>
                 </div>
               </div>
@@ -612,125 +629,144 @@
 
               <div class="inspector-scrollable-body">
                 
-                <!-- 1. PRIMARY FORECAST & CONFIDENCE HERO -->
+                <!-- 1. 24-HOUR RAINFALL FORECAST HERO -->
                 <div class="inspect-hero-group">
                   <div class="forecast-value-block">
-                    <span class="hero-kicker">24-HOUR ACCUMULATED RAINFALL</span>
+                    <span class="hero-kicker">24-HOUR RAINFALL FORECAST</span>
                     <div class="hero-reading">
-                      <span class="hero-number" id="inspect-fused-val">21.38</span>
+                      <span class="hero-number" id="inspect-fused-val">--</span>
                       <span class="hero-unit">mm</span>
                     </div>
                     <div class="hero-tags">
-                      <span class="pill-fused-tag">50/50 FUSED FORECAST</span>
-                      <span class="pill-regime-tag" id="inspect-regime-tag">Moderate Rain</span>
+                      <span class="pill-fused-tag" title="Both forecast models contribute equally to the final rainfall estimate.">
+                        EQUAL-WEIGHT FUSION <span class="tag-sub">(50% GFS + 50% ECMWF)</span>
+                      </span>
+                      <span class="pill-regime-tag" id="inspect-regime-tag">Rainfall</span>
                     </div>
                   </div>
+                </div>
 
-                  <!-- Confidence Banner -->
+                <!-- 2. EMPIRICAL CONFIDENCE & WHY THIS CONFIDENCE? (Sections 7, 8, 9) -->
+                <div class="inspect-confidence-card">
+                  <!-- Confidence Status Banner -->
                   <div class="confidence-status-banner" id="inspect-conf-banner">
                     <div class="conf-banner-header">
                       <span class="conf-status-icon" id="inspect-conf-icon">●</span>
                       <div class="conf-status-titles">
+                        <span class="conf-kicker">EMPIRICAL CONFIDENCE</span>
                         <strong class="conf-status-main" id="inspect-conf-title">LOW CONFIDENCE</strong>
-                        <span class="conf-status-sub" id="inspect-conf-sub">High Model Disagreement</span>
                       </div>
                     </div>
-                    <div class="conf-metric-specs">
-                      <div class="spec-col">
-                        <span class="spec-k">Model Disagreement (D):</span>
-                        <span class="spec-v" id="inspect-banner-d">6.25 mm</span>
+                    <p class="conf-subtext" id="inspect-conf-subtext">
+                      Confidence is based on historical model disagreement and observed forecast error.
+                    </p>
+                  </div>
+
+                  <!-- Why This Confidence? Narrative -->
+                  <div class="why-confidence-section">
+                    <div class="why-card-head">
+                      <span class="why-icon">💡</span>
+                      <h3 class="why-title">Why this confidence?</h3>
+                    </div>
+                    <p class="why-narrative-text" id="inspect-why-body">
+                      <!-- Populated dynamically by app.js: GFS and ECMWF differ substantially for this cell. Historical evaluation found that larger model disagreement was associated with larger forecast error magnitude. -->
+                    </p>
+                  </div>
+
+                  <!-- Historical Evidence Grid (Section 9) -->
+                  <div class="historical-evidence-card">
+                    <div class="hist-evidence-header">
+                      <span class="hist-evidence-title">HISTORICAL ERROR EVIDENCE</span>
+                      <span class="hist-evidence-sub">EXP004 Monsoon Calibration</span>
+                    </div>
+                    <div class="historical-evidence-grid">
+                      <div class="hist-stat-item">
+                        <span class="hist-k">CURRENT DISAGREEMENT</span>
+                        <span class="hist-v" id="inspect-evidence-d">-- mm</span>
                       </div>
-                      <div class="spec-col">
-                        <span class="spec-k">Historical MAE in Regime:</span>
-                        <span class="spec-v" id="inspect-banner-mae">9.46 mm</span>
+                      <div class="hist-stat-item">
+                        <span class="hist-k">HISTORICAL REGIME</span>
+                        <span class="hist-v" id="inspect-evidence-regime">--</span>
                       </div>
+                      <div class="hist-stat-item highlight-hist">
+                        <span class="hist-k">HISTORICAL MAE</span>
+                        <span class="hist-v text-accent" id="inspect-evidence-mae">-- mm</span>
+                      </div>
+                    </div>
+                    <div class="hist-evidence-note">
+                      Historical MAE for this disagreement regime. (This is not a probability; it describes the historical error regime associated with current model disagreement.)
                     </div>
                   </div>
                 </div>
 
-                <!-- 2. CELL FUSION PIPELINE -->
-                <div class="inspect-pipeline-card">
-                  <span class="section-micro-label">FUSION &amp; CONFIDENCE FLOW</span>
-                  <div class="cell-pipeline-flow">
-                    <div class="flow-nwp-inputs">
-                      <div class="nwp-chip chip-gfs">
-                        <span class="chip-name">GFS</span>
-                        <span class="chip-val" id="inspect-gfs-val">18.25 mm</span>
-                      </div>
-                      <div class="nwp-chip chip-ecmwf">
-                        <span class="chip-name">ECMWF</span>
-                        <span class="chip-val" id="inspect-ecmwf-val">24.50 mm</span>
-                      </div>
+                <!-- 3. MODEL INPUTS & VISUAL COMPARISON BAR (Section 11) -->
+                <div class="inspect-models-card">
+                  <div class="models-header">
+                    <div>
+                      <span class="section-micro-label">MODEL INPUTS</span>
+                      <span class="models-sublabel">Comparing NWP Forecast Estimates</span>
                     </div>
-                    <div class="flow-connector">
-                      <span class="flow-arrow">→</span>
-                    </div>
-                    <div class="flow-fused-target">
-                      <div class="nwp-chip chip-fused">
-                        <span class="chip-name">50/50 Centroid</span>
-                        <span class="chip-val" id="inspect-compare-fused">21.38 mm</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 3. MODEL COMPARISON VISUALIZATION (Clean horizontal range, no pin overlap) -->
-                <div class="inspect-comparison-card">
-                  <div class="comp-header">
-                    <span class="section-micro-label">NWP MODEL SPREAD COMPARISON (+24H)</span>
-                    <span class="comp-spread-badge" id="bar-diff-tag">Spread: 6.25 mm</span>
+                    <span class="comp-spread-badge" id="bar-diff-tag">Spread D: -- mm</span>
                   </div>
 
-                  <!-- Horizontal Visual Range Bar -->
-                  <div class="range-bar-container">
-                    <div class="range-track">
-                      <!-- Markers -->
-                      <div class="marker-pin pin-gfs" id="pin-gfs" title="NOAA GFS"></div>
-                      <div class="marker-pin pin-fused" id="pin-fused" title="50/50 Fused"></div>
-                      <div class="marker-pin pin-ecmwf" id="pin-ecmwf" title="ECMWF IFS"></div>
+                  <!-- Simple Visual Model-Comparison Bar (Section 11) -->
+                  <div class="visual-model-bars">
+                    <div class="vbar-row">
+                      <span class="vbar-label vbar-gfs">GFS</span>
+                      <div class="vbar-track">
+                        <div class="vbar-fill fill-gfs" id="inspect-vbar-gfs" style="width: 0%"></div>
+                      </div>
+                      <span class="vbar-val" id="inspect-gfs-val">-- mm</span>
                     </div>
-                    <div class="range-axis-labels">
-                      <span id="pin-lbl-min">0 mm</span>
-                      <span id="pin-lbl-max">50 mm</span>
+                    <div class="vbar-row">
+                      <span class="vbar-label vbar-ecmwf">ECMWF</span>
+                      <div class="vbar-track">
+                        <div class="vbar-fill fill-ecmwf" id="inspect-vbar-ecmwf" style="width: 0%"></div>
+                      </div>
+                      <span class="vbar-val" id="inspect-ecmwf-val">-- mm</span>
+                    </div>
+                    <div class="vbar-row vbar-row-fused">
+                      <span class="vbar-label vbar-fused">FUSED</span>
+                      <div class="vbar-track">
+                        <div class="vbar-fill fill-fused" id="inspect-vbar-fused" style="width: 0%"></div>
+                      </div>
+                      <span class="vbar-val" id="inspect-compare-fused">-- mm</span>
                     </div>
                   </div>
+                  <div class="vbar-helper-note">
+                    Shows how the models differ. Equal weight applied to each model.
+                  </div>
 
-                  <!-- Discrete Model Value Grid -->
+                  <!-- Discrete Model Readings Grid -->
                   <div class="model-readings-grid">
                     <div class="model-stat-box box-gfs">
                       <span class="m-name">NOAA GFS</span>
-                      <span class="m-val" id="card-gfs-val">18.25 mm</span>
+                      <span class="m-val" id="card-gfs-val">-- mm</span>
                       <span class="m-meta">0.25° APCP</span>
                     </div>
                     <div class="model-stat-box box-ecmwf">
                       <span class="m-name">ECMWF IFS</span>
-                      <span class="m-val" id="card-ecmwf-val">24.50 mm</span>
+                      <span class="m-val" id="card-ecmwf-val">-- mm</span>
                       <span class="m-meta">0.25° tp</span>
                     </div>
                     <div class="model-stat-box box-fused">
-                      <span class="m-name">50/50 FUSED</span>
-                      <span class="m-val" id="card-fused-val">21.38 mm</span>
-                      <span class="m-meta">Ensemble</span>
+                      <span class="m-name">EQUAL-WEIGHT FUSION</span>
+                      <span class="m-val" id="card-fused-val">-- mm</span>
+                      <span class="m-meta">50% GFS + 50% ECMWF</span>
+                    </div>
+                    <div class="model-stat-box box-dis">
+                      <span class="m-name">DISAGREEMENT</span>
+                      <span class="m-val text-warn" id="card-dis-val">-- mm</span>
+                      <span class="m-meta">|GFS − ECMWF|</span>
                     </div>
                   </div>
                 </div>
 
-                <!-- 4. WHY THIS CONFIDENCE? (Explainable Empirical Narrative) -->
-                <div class="why-confidence-card">
-                  <div class="why-card-head">
-                    <span class="why-icon">💡</span>
-                    <h3 class="why-title">Why This Confidence?</h3>
-                  </div>
-                  <div class="why-narrative-text" id="inspect-why-body">
-                    <!-- Populated by app.js -->
-                  </div>
-                </div>
-
-                <!-- 5. IMD RETROSPECTIVE VERIFICATION AUDIT -->
+                <!-- 4. RETROSPECTIVE VERIFICATION (Section 17) -->
                 <div class="imd-audit-card" id="inspect-verification-section">
                   <div class="imd-audit-head">
                     <div class="audit-titles">
-                      <span class="section-micro-label">RETROSPECTIVE OBSERVATION</span>
+                      <span class="section-micro-label">HISTORICAL OBSERVATION</span>
                       <h3 class="audit-headline">IMD Retrospective Verification</h3>
                     </div>
                     <span class="badge-causal-pill">Strictly Causal (T-1)</span>
@@ -742,7 +778,7 @@
                       <span class="audit-v text-imd-purple" id="inspect-imd-val">-- mm</span>
                     </div>
                     <div class="audit-stat-item">
-                      <span class="audit-k">50/50 Fused Forecast:</span>
+                      <span class="audit-k">Equal-Weight Fused Forecast:</span>
                       <span class="audit-v" id="inspect-fused-compare-val">-- mm</span>
                     </div>
                     <div class="audit-stat-item">
@@ -758,11 +794,11 @@
                   </div>
 
                   <p class="audit-temporal-note">
-                    Observation window ends 08:30 IST. ~87.5% temporal overlap with 00–00 UTC forecast run. Strictly zero same-day leakage.
+                    IMD Retrospective Observation used for historical verification. Observation window ends 08:30 IST (~87.5% temporal overlap with 00–00 UTC forecast run). Strictly zero same-day leakage.
                   </p>
                 </div>
 
-                <!-- 6. TECHNICAL METADATA (Collapsible Details) -->
+                <!-- 5. TECHNICAL DETAILS (Expandable Section) -->
                 <details class="tech-accordion-item" id="acc-tech-details">
                   <summary class="accordion-header">
                     <span>Technical Grid &amp; Calibration Metadata</span>
@@ -772,26 +808,15 @@
                     <div class="metadata-grid">
                       <div class="meta-row"><span class="mk">Grid Coordinate:</span><span class="mv" id="tech-cell-coords">--</span></div>
                       <div class="meta-row"><span class="mk">Subregion:</span><span class="mv" id="tech-subregion">--</span></div>
+                      <div class="meta-row"><span class="mk">Forecast Cycle:</span><span class="mv">00 UTC Cycle</span></div>
+                      <div class="meta-row"><span class="mk">Valid Window:</span><span class="mv">+24h Accumulation Lead</span></div>
+                      <div class="meta-row"><span class="mk">Spatial Resolution:</span><span class="mv">0.25° (~27 km terrestrial)</span></div>
                       <div class="meta-row"><span class="mk">Disagreement (D):</span><span class="mv" id="tech-dis-raw">-- mm</span></div>
                       <div class="meta-row"><span class="mk">Normalized D:</span><span class="mv" id="tech-dis-norm">--</span></div>
                       <div class="meta-row"><span class="mk">Calibration Rule:</span><span class="mv" id="tech-threshold-rule">D &ge; 2.06 mm &rarr; Low Conf</span></div>
                       <div class="meta-row"><span class="mk">Regime Category:</span><span class="mv" id="tech-regime">--</span></div>
                       <div class="meta-row"><span class="mk">Ensemble Weights:</span><span class="mv">0.50 GFS + 0.50 ECMWF</span></div>
-                      <div class="meta-row"><span class="mk">Spatial Resolution:</span><span class="mv">0.25° (~27 km terrestrial)</span></div>
-                    </div>
-                  </div>
-                </details>
-
-                <!-- 7. PROVENANCE & RIGOR (Collapsible) -->
-                <details class="tech-accordion-item" id="acc-provenance">
-                  <summary class="accordion-header">
-                    <span>Scientific Provenance &amp; Data Integrity</span>
-                    <span class="acc-arrow">▼</span>
-                  </summary>
-                  <div class="accordion-content">
-                    <div class="metadata-grid">
-                      <div class="meta-row"><span class="mk">NWP Source 1:</span><span class="mv">NOAA GFS 0.25° GRIB2 (APCP 00 UTC)</span></div>
-                      <div class="meta-row"><span class="mk">NWP Source 2:</span><span class="mv">ECMWF IFS 0.25° GRIB2 (tp 00 UTC)</span></div>
+                      <div class="meta-row"><span class="mk">NWP Sources:</span><span class="mv">NOAA GFS 0.25° APCP + ECMWF IFS 0.25° tp</span></div>
                       <div class="meta-row"><span class="mk">Verification Source:</span><span class="mv">IMD 0.25° Gridded Binary (Pune NCC)</span></div>
                       <div class="meta-row"><span class="mk">Integrity Pledge:</span><span class="mv">100% Real Forecasts (Zero Synthetic Data)</span></div>
                     </div>
@@ -823,7 +848,7 @@
           <!-- Enhanced Verification Hero Metrics Row -->
           <div class="verif-hero-row">
             <div class="verif-hero-card highlight-teal">
-              <span class="verif-hero-k">50/50 Fused MAE (Season)</span>
+              <span class="verif-hero-k">Equal-Weight Fused MAE (Season)</span>
               <div class="verif-hero-v">7.321 <span class="small">mm</span></div>
               <div class="verif-hero-note">Across Jun&ndash;Aug vs IMD retrospective obs</div>
             </div>
@@ -847,7 +872,7 @@
           <!-- Statistical Scorecard -->
           <div class="verif-scorecard-grid">
             <div class="score-card highlight-green">
-              <span class="sc-label">50/50 FUSED MAE (SEASON-WIDE)</span>
+              <span class="sc-label">EQUAL-WEIGHT FUSED MAE (SEASON-WIDE)</span>
               <div class="sc-val-row">
                 <span class="sc-val">7.321</span>
                 <span class="sc-unit">mm</span>
@@ -921,8 +946,8 @@
                     <th>Mean D (mm)</th>
                     <th>GFS MAE (mm)</th>
                     <th>ECMWF MAE (mm)</th>
-                    <th>50/50 Fused MAE (mm)</th>
-                    <th>50/50 RMSE (mm)</th>
+                    <th>Equal-Weight Fused MAE (mm)</th>
+                    <th>Equal-Weight RMSE (mm)</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-bin-metrics">
@@ -1134,7 +1159,7 @@
                   <span class="wpage-val" id="wpage-ecmwf-val">-- mm</span>
                 </div>
                 <div class="wpage-model-bar-row">
-                  <span class="wpage-model-name m-fused">50/50 FUSED</span>
+                  <span class="wpage-model-name m-fused">EQUAL-WEIGHT FUSION</span>
                   <div class="wpage-bar-track"><div class="wpage-bar-fill f-fused" style="width:100%"></div></div>
                   <span class="wpage-pct" style="color:#0d9488">100%</span>
                   <span class="wpage-val" id="wpage-fused-val">-- mm</span>
@@ -1155,7 +1180,7 @@
                 </div>
                 <div class="wpage-stat-grid">
                   <div class="wpage-stat-chip">
-                    <div class="wpage-stat-k">50/50 Fused MAE</div>
+                    <div class="wpage-stat-k">Equal-Weight Fused MAE</div>
                     <div class="wpage-stat-v">7.321 mm</div>
                   </div>
                   <div class="wpage-stat-chip">
@@ -1253,14 +1278,14 @@
             </p>
           </div>
 
-          <!-- Live Domain Signals -->
+          <!-- Domain Forecast Signals -->
           <div class="weights-page-full">
             <div class="weights-page-grid">
 
               <!-- Rainfall Intensity Classification -->
               <div class="wpage-card">
                 <div class="wpage-card-head">
-                  <div class="wpage-card-title">&#127783;&#65039; Rainfall Intensity &mdash; Live Domain Signals</div>
+                  <div class="wpage-card-title">&#127783;&#65039; Rainfall Intensity &mdash; Domain Forecast Signals</div>
                   <div class="wpage-card-sub">Derived from current fused forecast. Updated per date selection.</div>
                 </div>
                 <div class="wpage-card-body">
@@ -1458,21 +1483,25 @@
 
     <!-- Slim Operational Footer Bar -->
     <footer class="app-status-bar" role="contentinfo">
+      <div class="status-pill status-pill-retro" title="Current prototype demonstrates the validated historical workflow; it is not a live 2026 forecast feed.">
+        <span class="k">Notice:</span>
+        <span class="v">Retrospective Demonstration (Jun–Aug 2024) &bull; Not a live 2026 forecast feed</span>
+      </div>
       <div class="status-pill">
         <span class="k">Sources:</span>
         <span class="v">NOAA GFS (0.25°) + ECMWF IFS (0.25°)</span>
       </div>
       <div class="status-pill">
         <span class="k">Fusion:</span>
-        <span class="v">50/50 Equal-Weight Static Centroid</span>
+        <span class="v">Equal-Weight Fusion (50% GFS + 50% ECMWF)</span>
       </div>
       <div class="status-pill">
         <span class="k">Confidence:</span>
-        <span class="v">Calibrated Disagreement Engine</span>
+        <span class="v">Empirical Regimes (Historical Error Linked to D)</span>
       </div>
       <div class="status-pill">
         <span class="k">Verification:</span>
-        <span class="v">IMD 0.25° Daily Rainfall (Causal T-1)</span>
+        <span class="v">IMD Retrospective Observation (Causal T-1)</span>
       </div>
     </footer>
 

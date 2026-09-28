@@ -136,7 +136,7 @@ class OperationalForecastEngine:
                 "predicted_regime": row.get("predicted_regime", "Moderate"),
             }
 
-            # Retrospective ground truth verification if legitimately available
+            # Retrospective IMD verification if legitimately available
             if "imd" in row and not np.isnan(row["imd"]) and row["imd"] >= 0:
                 imd_val = round(float(row["imd"]), 2)
                 pt["imd_mm"] = imd_val

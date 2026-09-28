@@ -786,7 +786,7 @@ class Meteorological3DViewer {
       </div>
       <div class="three-tip-grid">
         <div class="tip-item">
-          <span class="tip-k">FUSED</span>
+          <span class="tip-k">EQUAL-WEIGHT FUSION</span>
           <span class="tip-v text-accent">${pt.fused_mm.toFixed(2)} mm</span>
         </div>
         <div class="tip-item">
@@ -803,9 +803,9 @@ class Meteorological3DViewer {
         </div>
       </div>
       <div class="three-tip-conf" style="border-left: 3px solid ${confColor};">
-        <span>Confidence: <strong>${confClass}</strong> (MAE: ${pt.expected_mae_mm.toFixed(2)} mm)</span>
+        <span>Empirical Confidence: <strong>${confClass}</strong> (Hist. MAE: ${pt.expected_mae_mm.toFixed(2)} mm)</span>
       </div>
-      <div class="three-tip-action">Click to inspect cell &amp; view retrospective IMD audit</div>
+      <div class="three-tip-action">Click to inspect cell &amp; view retrospective verification</div>
     `;
 
     const containerRect = this.container.getBoundingClientRect();
