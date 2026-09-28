@@ -8,9 +8,11 @@
 const state = {
   operationalMode: "live", // "live" | "retrospective" (DEFAULT: live)
   currentDate: "2024-07-15",
+  activeVariable: "precipitation", // "precipitation" | "temperature" | "wind"
+  activeLead: 24, // 24 | 48 | 72
   liveForecastData: null,
   liveStatus: null,
-  activeLayer: "fused",
+  activeLayer: "blended", // "blended" | "fused" | "gfs" | "ecmwf" | "w_gfs" | "w_ecmwf" | "dominant_model" | "weight_entropy" | "extreme_guidance" | "confidence" | "disagreement" | "imd"
   activeRegion: "All",
   activeView: "forecast",
   allDates: [],
@@ -46,9 +48,9 @@ const TILES = {
   }
 };
 
-// Distinct Meteorological Palettes
+// Distinct Meteorological Palettes (Multi-Variable, Weights, Extremes)
 const PALETTES = {
-  // 1. Meteorological Rainfall Intensity Palette
+  // 1. Meteorological Rainfall Intensity Palette (mm / 24h)
   rain: [
     { min: 65.0, color: "#7e22ce", label: "&ge; 65 mm (Extreme)" },
     { min: 35.0, color: "#dc2626", label: "35 &ndash; 65 mm (Very Heavy)" },
@@ -58,20 +60,56 @@ const PALETTES = {
     { min: 0.1,  color: "#7dd3fc", label: "0.1 &ndash; 2.5 mm (Trace)" },
     { min: 0.0,  color: "rgba(241, 245, 249, 0.05)", label: "&lt; 0.1 mm (Dry)" },
   ],
-  // 2. Confidence Palettes (RULE: Red is NOT used for Low Confidence)
-  confidence: [
-    { key: "High Confidence", color: "#0d9488", label: "High Confidence (D &lt; 0.11 mm, Hist. MAE: 2.02 mm)" },
-    { key: "Moderate Confidence", color: "#d97706", label: "Moderate Confidence (0.11 &le; D &lt; 2.06 mm, Hist. MAE: 3.75 mm)" },
-    { key: "Low Confidence", color: "#86198f", label: "Low Confidence (D &ge; 2.06 mm, Hist. MAE: 9.46 mm)" },
+  // 2. 2m Air Temperature Palette (°C)
+  temperature: [
+    { min: 45.0, color: "#7e22ce", label: "&ge; 45.0 &deg;C (Severe Heat Wave)" },
+    { min: 42.0, color: "#dc2626", label: "42.0 &ndash; 45.0 &deg;C (Heat Wave Warning)" },
+    { min: 38.0, color: "#ea580c", label: "38.0 &ndash; 42.0 &deg;C (Hot / High Thermal)" },
+    { min: 32.0, color: "#f59e0b", label: "32.0 &ndash; 38.0 &deg;C (Warm / Moderate)" },
+    { min: 24.0, color: "#10b981", label: "24.0 &ndash; 32.0 &deg;C (Mild / Temperate)" },
+    { min: 16.0, color: "#06b6d4", label: "16.0 &ndash; 24.0 &deg;C (Cool)" },
+    { min: -10.0, color: "#3b82f6", label: "&lt; 16.0 &deg;C (Cold)" },
   ],
-  // 3. Disagreement Palettes (Monochromatic Analytical Scale)
+  // 3. 10m Wind Speed Palette (km/h)
+  wind: [
+    { min: 88.0, color: "#7e22ce", label: "&ge; 88 km/h (Storm / Severe Gale)" },
+    { min: 62.0, color: "#dc2626", label: "62 &ndash; 88 km/h (Gale Warning)" },
+    { min: 45.0, color: "#ea580c", label: "45 &ndash; 62 km/h (Strong Breeze)" },
+    { min: 30.0, color: "#f59e0b", label: "30 &ndash; 45 km/h (Moderate Wind)" },
+    { min: 15.0, color: "#10b981", label: "15 &ndash; 30 km/h (Breeze)" },
+    { min: 0.0,  color: "rgba(56, 189, 248, 0.25)", label: "&lt; 15 km/h (Light / Calm)" },
+  ],
+  // 4. Model Blending Weights Simplex Palette (w in [0.05, 0.95])
+  weights: [
+    { min: 0.70, color: "#c2410c", label: "w &ge; 0.70 (Strong Dominance)" },
+    { min: 0.58, color: "#ea580c", label: "0.58 &ndash; 0.70 (Dominant)" },
+    { min: 0.52, color: "#f59e0b", label: "0.52 &ndash; 0.58 (Slight Bias)" },
+    { min: 0.48, color: "#64748b", label: "0.48 &ndash; 0.52 (Consensus 50/50)" },
+    { min: 0.42, color: "#0284c7", label: "0.42 &ndash; 0.48 (Slight Subordinate)" },
+    { min: 0.30, color: "#0369a1", label: "0.30 &ndash; 0.42 (Subordinate)" },
+    { min: 0.0,  color: "#0c4a6e", label: "&lt; 0.30 (Suppressed)" },
+  ],
+  // 5. Shannon Weight Entropy Palette (H(s) in [0, ln(2) = 0.693])
+  entropy: [
+    { min: 0.68, color: "#0d9488", label: "H &ge; 0.68 (Balanced Uncertainty, ~50/50)" },
+    { min: 0.62, color: "#0284c7", label: "0.62 &ndash; 0.68 (Mild Model Preference)" },
+    { min: 0.50, color: "#d97706", label: "0.50 &ndash; 0.62 (Moderate Preference)" },
+    { min: 0.0,  color: "#7e22ce", label: "&lt; 0.50 (Strong Single-Model Bias)" },
+  ],
+  // 6. Confidence Palettes (RULE: Red is NOT used for Low Confidence)
+  confidence: [
+    { key: "High Confidence", color: "#0d9488", label: "High Confidence (D &lt; 0.11, Hist. MAE: 2.02)" },
+    { key: "Moderate Confidence", color: "#d97706", label: "Moderate Confidence (0.11 &le; D &lt; 2.06, Hist. MAE: 3.75)" },
+    { key: "Low Confidence", color: "#86198f", label: "Low Confidence (D &ge; 2.06, Hist. MAE: 9.46)" },
+  ],
+  // 7. Disagreement Palettes (Monochromatic Analytical Scale)
   disagreement: [
-    { min: 10.0, color: "#312e81", label: "&ge; 10.0 mm (Extreme Divergence)" },
-    { min: 5.0,  color: "#4338ca", label: "5.0 &ndash; 10.0 mm (Very High Disagreement)" },
-    { min: 2.06, color: "#6366f1", label: "2.06 &ndash; 5.0 mm (High Disagreement)" },
-    { min: 0.5,  color: "#818cf8", label: "0.5 &ndash; 2.06 mm (Moderate Disagreement)" },
-    { min: 0.11, color: "#a5b4fc", label: "0.11 &ndash; 0.5 mm (Low Disagreement)" },
-    { min: 0.0,  color: "rgba(224, 231, 255, 0.25)", label: "&lt; 0.11 mm (Consensus Agreement)" },
+    { min: 10.0, color: "#312e81", label: "&ge; 10.0 (Extreme Divergence)" },
+    { min: 5.0,  color: "#4338ca", label: "5.0 &ndash; 10.0 (Very High Disagreement)" },
+    { min: 2.06, color: "#6366f1", label: "2.06 &ndash; 5.0 (High Disagreement)" },
+    { min: 0.5,  color: "#818cf8", label: "0.5 &ndash; 2.06 (Moderate Disagreement)" },
+    { min: 0.11, color: "#a5b4fc", label: "0.11 &ndash; 0.5 (Low Disagreement)" },
+    { min: 0.0,  color: "rgba(224, 231, 255, 0.25)", label: "&lt; 0.11 (Consensus Agreement)" },
   ]
 };
 
@@ -208,54 +246,88 @@ function updateMapContextBadge() {
   const helperEl = document.getElementById("map-context-helper");
   if (!badge || !titleEl || !unitEl || !helperEl) return;
 
+  const varName = state.activeVariable === "temperature" ? "TEMPERATURE" : state.activeVariable === "wind" ? "WIND SPEED" : "RAINFALL";
+  const varUnit = state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm / 24h";
+  const leadTag = `+${state.activeLead || 24}h Lead`;
+
   if (state.viewDimension === "3d") {
     if (state.threeMode === "rain") {
-      titleEl.textContent = "3D RAINFALL";
-      unitEl.textContent = "mm / 24h";
-      helperEl.innerHTML = "Height = forecast rainfall &bull; Color = rainfall intensity. Click any column to inspect.";
+      titleEl.textContent = `3D ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} &bull; Color = intensity. Click any column to inspect.`;
     } else {
-      titleEl.textContent = "3D MODEL DISAGREEMENT";
-      unitEl.textContent = "|GFS − ECMWF| (mm)";
-      helperEl.innerHTML = "Height = |GFS − ECMWF| &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime under validated thresholds.";
+      titleEl.textContent = `3D MODEL DISAGREEMENT (${leadTag})`;
+      unitEl.textContent = `|GFS − ECMWF| (${varUnit})`;
+      helperEl.innerHTML = "Height = |GFS − ECMWF| &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime.";
     }
     return;
   }
 
   // 2D Map modes
   switch (state.activeLayer) {
+    case "blended":
+      titleEl.textContent = `DYNAMIC AI BLEND — ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.textContent = "Context-aware simplex weighting (w_GFS · GFS + w_ECMWF · ECMWF). Click any location to inspect.";
+      break;
     case "fused":
-      titleEl.textContent = "24-HOUR RAINFALL FORECAST";
-      unitEl.textContent = "mm / 24h";
-      helperEl.textContent = "Equal-weight fusion (50% GFS + 50% ECMWF). Click any location to inspect the forecast.";
+      titleEl.textContent = `50/50 BASELINE — ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.textContent = "Equal-weight reference centroid (50% GFS + 50% ECMWF). Click any location to inspect.";
       break;
     case "gfs":
-      titleEl.textContent = "NOAA GFS FORECAST";
-      unitEl.textContent = "mm / 24h";
-      helperEl.textContent = "Global Forecast System 0.25° NWP rainfall estimate. Click any location to inspect.";
+      titleEl.textContent = `NOAA GFS — ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.textContent = "Global Forecast System 0.25° NWP forecast estimate. Click any location to inspect.";
       break;
     case "ecmwf":
-      titleEl.textContent = "ECMWF IFS FORECAST";
-      unitEl.textContent = "mm / 24h";
-      helperEl.textContent = "Integrated Forecasting System 0.25° NWP rainfall estimate. Click any location to inspect.";
+      titleEl.textContent = `ECMWF IFS — ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.textContent = "Integrated Forecasting System 0.25° NWP forecast estimate. Click any location to inspect.";
+      break;
+    case "w_gfs":
+      titleEl.textContent = `GFS MODEL WEIGHT MAP (${leadTag})`;
+      unitEl.textContent = "w_GFS ∈ [0.05, 0.95]";
+      helperEl.textContent = "Simplex weight allocated to NOAA GFS based on regional priors, lead time, historical skill, and regime.";
+      break;
+    case "w_ecmwf":
+      titleEl.textContent = `ECMWF MODEL WEIGHT MAP (${leadTag})`;
+      unitEl.textContent = "w_ECMWF ∈ [0.05, 0.95]";
+      helperEl.textContent = "Simplex weight allocated to ECMWF IFS (strictly complements GFS: w_GFS + w_ECMWF = 1.0).";
+      break;
+    case "dominant_model":
+      titleEl.textContent = `DOMINANT MODEL DISTRIBUTION (${leadTag})`;
+      unitEl.textContent = "GFS (>0.55) / ECMWF (>0.55) / Consensus";
+      helperEl.textContent = "Spatial mapping of which dynamical core has dominant allocation over each 0.25° cell.";
+      break;
+    case "weight_entropy":
+      titleEl.textContent = `SHANNON WEIGHT ENTROPY (${leadTag})`;
+      unitEl.textContent = "H(s) ∈ [0, 0.693] nats";
+      helperEl.textContent = "H = -∑ w ln w. Measures ensemble dispersion. High entropy indicates balanced model consensus.";
+      break;
+    case "extreme_guidance":
+      titleEl.textContent = `EXTREME WEATHER GUIDANCE (${leadTag})`;
+      unitEl.textContent = "Deterministic Thresholds";
+      helperEl.textContent = "IMD/WMO deterministic exceedance alerts (Heavy Rain ≥ 15/64.5mm, Heat Wave ≥ 40°C, High Wind ≥ 45/62km/h).";
       break;
     case "disagreement":
-      titleEl.textContent = "MODEL DISAGREEMENT";
-      unitEl.textContent = "|GFS − ECMWF| (mm)";
-      helperEl.textContent = "Higher disagreement is associated with higher historical forecast error. Click any location to inspect.";
+      titleEl.textContent = `MODEL DISAGREEMENT D (${leadTag})`;
+      unitEl.textContent = `|GFS − ECMWF| (${varUnit})`;
+      helperEl.textContent = "Inter-model spread. Higher disagreement is associated with higher historical forecast error.";
       break;
     case "confidence":
-      titleEl.textContent = "EMPIRICAL CONFIDENCE";
+      titleEl.textContent = `EMPIRICAL CONFIDENCE REGIMES (${leadTag})`;
       unitEl.textContent = "High / Moderate / Low";
-      helperEl.textContent = "Confidence is based on historical model disagreement and observed forecast error. Click any location to inspect.";
+      helperEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
       break;
     case "imd":
-      titleEl.textContent = "IMD RETROSPECTIVE OBSERVATION";
-      unitEl.textContent = "mm / 24h";
-      helperEl.textContent = "Historical gridded gauge observation (0.25° NCC Pune) for retrospective verification. Click any location to inspect.";
+      titleEl.textContent = `IMD RETROSPECTIVE OBSERVATION (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.textContent = "Historical gridded gauge observation (0.25° NCC Pune) for retrospective verification.";
       break;
     default:
-      titleEl.textContent = "24-HOUR RAINFALL FORECAST";
-      unitEl.textContent = "mm / 24h";
+      titleEl.textContent = `${varName} FORECAST (${leadTag})`;
+      unitEl.textContent = varUnit;
       helperEl.textContent = "Click any location to inspect the forecast.";
       break;
   }
@@ -371,6 +443,12 @@ function switchView(viewName) {
   });
   if (viewName === "forecast" && state.map) {
     setTimeout(() => state.map.invalidateSize(), 150);
+  } else if (viewName === "weights") {
+    updateWeightsModeView();
+  } else if (viewName === "extremes") {
+    updateExtremesModeView();
+  } else if (viewName === "verification") {
+    loadVerificationData();
   }
 }
 
@@ -383,6 +461,66 @@ function setupEventListeners() {
   const btnRetro = document.getElementById("btn-mode-retro");
   if (btnLive) btnLive.addEventListener("click", () => setOperationalMode("live"));
   if (btnRetro) btnRetro.addEventListener("click", () => setOperationalMode("retrospective"));
+
+  // Target Variable Buttons (Rain / Temp / Wind)
+  document.querySelectorAll(".var-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetVar = btn.dataset.var;
+      if (state.operationalMode === "live") {
+        if (targetVar !== "precipitation") {
+          showErrorModal(
+            "LIVE INGESTION CONFIGURATION",
+            "Live operational NWP ingestion is currently active for 24-Hour Precipitation (00Z NOAA GFS + 00Z ECMWF IFS).",
+            "For multi-variable (Temperature, Wind Speed) and multi-lead (+48h, +72h) analysis, please switch to Retrospective mode."
+          );
+          return;
+        }
+        document.querySelectorAll(".var-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.activeVariable = "precipitation";
+        updateMapContextBadge();
+        loadLiveForecast();
+      } else {
+        document.querySelectorAll(".var-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.activeVariable = targetVar;
+        updateMapContextBadge();
+        if (state.currentGridData) {
+          loadForecastForDate(state.currentDate);
+        }
+      }
+    });
+  });
+
+  // Forecast Lead Time Buttons (+24h / +48h / +72h)
+  document.querySelectorAll(".lead-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetLead = parseInt(btn.dataset.lead, 10);
+      if (state.operationalMode === "live") {
+        if (targetLead !== 24) {
+          showErrorModal(
+            "LIVE INGESTION CONFIGURATION",
+            "Live operational NWP ingestion is currently active for the +24h lead cycle.",
+            "For +48h and +72h extended lead analysis, please switch to Retrospective mode."
+          );
+          return;
+        }
+        document.querySelectorAll(".lead-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.activeLead = 24;
+        updateMapContextBadge();
+        loadLiveForecast();
+      } else {
+        document.querySelectorAll(".lead-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.activeLead = targetLead;
+        updateMapContextBadge();
+        if (state.currentGridData) {
+          loadForecastForDate(state.currentDate);
+        }
+      }
+    });
+  });
 
   // Date Picker
   const datePicker = document.getElementById("date-picker");
@@ -425,10 +563,30 @@ function setupEventListeners() {
   document.getElementById("btn-basemap-toggle").addEventListener("click", toggleBasemap);
   document.getElementById("btn-grid-toggle").addEventListener("click", toggleGridLines);
 
-  // Grouped Layer Switcher Buttons (2D Map)
-  document.querySelectorAll("#cluster-2d-layers .layer-tab").forEach((btn) => {
+  // 1. [ Layers ] Drawer / Popover Toggle and Items
+  const btnLayersToggle = document.getElementById("btn-layers-toggle");
+  const layersPopover = document.getElementById("layers-popover");
+  if (btnLayersToggle && layersPopover) {
+    btnLayersToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isExpanded = !layersPopover.classList.contains("hidden");
+      layersPopover.classList.toggle("hidden", isExpanded);
+      btnLayersToggle.setAttribute("aria-expanded", String(!isExpanded));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!layersPopover.contains(e.target) && !btnLayersToggle.contains(e.target)) {
+        layersPopover.classList.add("hidden");
+        btnLayersToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  // Popover Item Selection
+  document.querySelectorAll(".layer-popover-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (state.operationalMode === "live" && btn.dataset.layer === "imd") {
+      const layer = btn.dataset.layer;
+      if (state.operationalMode === "live" && layer === "imd") {
         showErrorModal(
           "IMD OBSERVATIONS NOT AVAILABLE",
           "IMD retrospective observations for the current 24-hour live forecast run have not occurred yet.",
@@ -436,16 +594,30 @@ function setupEventListeners() {
         );
         return;
       }
-      document.querySelectorAll("#cluster-2d-layers .layer-tab").forEach((b) => b.classList.remove("active"));
+
+      document.querySelectorAll(".layer-popover-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      state.activeLayer = btn.dataset.layer;
-      
+      state.activeLayer = layer;
+
+      // Update badge label on button
+      const labelSpan = btn.querySelector(".layer-item-label");
+      const badge = document.getElementById("active-layer-badge");
+      if (labelSpan && badge) {
+        badge.textContent = labelSpan.textContent.trim();
+      }
+
+      // Close Popover
+      if (layersPopover) {
+        layersPopover.classList.add("hidden");
+        if (btnLayersToggle) btnLayersToggle.setAttribute("aria-expanded", "false");
+      }
+
       // Update IMD verification banner visibility
       const imdBanner = document.getElementById("imd-mode-banner");
       if (imdBanner) {
         imdBanner.classList.toggle("hidden", state.activeLayer !== "imd");
       }
-      
+
       updateMapContextBadge();
       renderGrid();
       updateLegend();
@@ -471,7 +643,8 @@ function setupEventListeners() {
           state.currentGridData,
           state.threeMode,
           state.threeShowLowConf,
-          state.activeRegion
+          state.activeRegion,
+          state.activeVariable
         );
       }
       updateLegend();
@@ -621,10 +794,25 @@ function updateDateDisplay() {
 
 async function loadForecastForDate(dateStr) {
   try {
-    const res = await fetch(`/api/forecast?date=${dateStr}`);
+    const varParam = state.activeVariable || "precipitation";
+    const leadParam = state.activeLead || 24;
+    const res = await fetch(`/api/v2/forecast?date=${dateStr}&variable=${varParam}&lead=${leadParam}`);
     const data = await res.json();
     
     if (data.status === "SUCCESS") {
+      // Normalise point attributes for complete multi-variable and backwards compatibility
+      data.points.forEach((pt) => {
+        pt.blend_val = pt.blended_val !== undefined ? pt.blended_val : pt.fused_mm;
+        pt.baseline_val = pt.baseline_50_50 !== undefined ? pt.baseline_50_50 : pt.fused_mm;
+        pt.fused_mm = pt.blend_val;
+        pt.gfs_mm = pt.gfs_val !== undefined ? pt.gfs_val : pt.gfs_mm;
+        pt.ecmwf_mm = pt.ecmwf_val !== undefined ? pt.ecmwf_val : pt.ecmwf_mm;
+        pt.disagreement_mm = pt.disagreement !== undefined ? pt.disagreement : pt.disagreement_mm;
+        pt.imd_mm = pt.obs_val !== undefined ? pt.obs_val : (pt.imd_mm !== undefined ? pt.imd_mm : null);
+        pt.fused_error_mm = pt.error_blended !== undefined ? pt.error_blended : (pt.error_baseline || 0.0);
+        pt.predicted_regime = pt.regime || pt.predicted_regime;
+      });
+
       state.retroForecastData = data;
       state.currentGridData = data;
       updateDomainStats(data);
@@ -671,6 +859,31 @@ async function loadLiveForecast(forceRefresh = false) {
     const data = await res.json();
 
     if (data.status === "SUCCESS") {
+      // Normalise points with simplex weights and extreme guidance defaults
+      if (data.points) {
+        data.points.forEach((pt) => {
+          pt.blend_val = pt.fused_mm;
+          pt.baseline_val = pt.fused_mm;
+          pt.w_gfs = 0.50;
+          pt.w_ecmwf = 0.50;
+          pt.dominant_model = "Consensus (Balanced)";
+          pt.weight_entropy = 0.693;
+          pt.delta_w_ai = 0.00;
+          pt.attribution = {
+            base_regional_weight: 0.50,
+            lead_time_adjustment: 0.00,
+            historical_skill_delta: 0.00,
+            weather_regime_delta: 0.00
+          };
+          const isExceeded = pt.fused_mm >= 15.6;
+          pt.extreme_guidance = {
+            is_exceeded: isExceeded,
+            warning_level: pt.fused_mm >= 64.5 ? "Heavy Rain" : pt.fused_mm >= 15.6 ? "Moderate Rain" : "Normal",
+            model_agreement: pt.gfs_mm >= 15.6 && pt.ecmwf_mm >= 15.6 ? "UNANIMOUS_EXCEEDANCE" : isExceeded ? "DIVERGENT_MODEL_EXCEEDANCE" : "BELOW_WARNING_THRESHOLD",
+            protocol: "IMD Pune 24-Hour Rainfall Classification Standard"
+          };
+        });
+      }
       state.liveForecastData = data;
       state.currentGridData = data;
 
@@ -760,6 +973,9 @@ async function setOperationalMode(mode) {
   const retroTimeline = document.getElementById("timeline-retro-controls");
   const liveTimeline = document.getElementById("timeline-live-dock-bar");
   const imdLayerBtn = document.getElementById("layer-btn-imd");
+  const blendTag = document.getElementById("summary-blend-tag");
+  const inspectBlendTag = document.getElementById("inspect-blend-tag");
+  const popoverBlendedLabel = document.getElementById("popover-label-blended");
 
   if (mode === "live") {
     if (btnLive) btnLive.classList.add("active");
@@ -770,29 +986,36 @@ async function setOperationalMode(mode) {
     if (retroTimeline) retroTimeline.classList.add("hidden");
     if (liveTimeline) liveTimeline.classList.remove("hidden");
 
-    // If IMD layer was active, switch to fused forecast
+    // Scientific labeling: 50/50 Operational Reference (never dynamic AI blend in live mode)
+    if (blendTag) blendTag.textContent = "50/50 Operational Reference";
+    if (inspectBlendTag) inspectBlendTag.textContent = "50/50 Operational Reference";
+    if (popoverBlendedLabel) popoverBlendedLabel.textContent = "50/50 Baseline";
+
+    // Enforce live variable & lead buttons to precipitation & 24h
+    document.querySelectorAll(".var-btn").forEach((b) => b.classList.toggle("active", b.dataset.var === "precipitation"));
+    document.querySelectorAll(".lead-btn").forEach((b) => b.classList.toggle("active", b.dataset.lead === "24"));
+    state.activeVariable = "precipitation";
+    state.activeLead = 24;
+
+    // If IMD layer was active, switch to blended forecast
     if (state.activeLayer === "imd") {
-      state.activeLayer = "fused";
-      document.querySelectorAll("#cluster-2d-layers .layer-tab").forEach(b => b.classList.remove("active"));
-      const fusedBtn = document.getElementById("layer-btn-fused");
-      if (fusedBtn) fusedBtn.classList.add("active");
+      state.activeLayer = "blended";
+      document.querySelectorAll(".layer-popover-item").forEach(b => b.classList.toggle("active", b.dataset.layer === "blended"));
+      const badge = document.getElementById("active-layer-badge");
+      if (badge) badge.textContent = "Blended";
     }
 
     if (imdLayerBtn) {
       imdLayerBtn.title = "IMD retrospective observations are pending for the live forecast run.";
-      const label = imdLayerBtn.querySelector("span:not(.layer-bullet)");
+      const label = imdLayerBtn.querySelector(".layer-item-label");
       if (label) label.textContent = "IMD Retrospective (Pending)";
     }
 
     // Update side panel titles
     const regLabel = document.getElementById("summary-region-label");
     if (regLabel) regLabel.textContent = "CURRENT 24-HOUR FORECAST";
-    const kicker = document.querySelector(".strip-kicker");
-    if (kicker) kicker.textContent = "CURRENT 24-HOUR NWP CONSENSUS";
-    const subtext = document.querySelector(".strip-subtext");
-    if (subtext) subtext.textContent = "Combining NOAA GFS and ECMWF IFS into one equal-weight forward forecast.";
     const mwCtxPeriod = document.getElementById("mw-ctx-period");
-    if (mwCtxPeriod) mwCtxPeriod.textContent = "Current Live Run";
+    if (mwCtxPeriod) mwCtxPeriod.textContent = "50/50 Operational Reference";
 
     await loadLiveForecast();
   } else {
@@ -804,21 +1027,22 @@ async function setOperationalMode(mode) {
     if (retroTimeline) retroTimeline.classList.remove("hidden");
     if (liveTimeline) liveTimeline.classList.add("hidden");
 
+    // Retrospective labeling: Context-Aware Dynamic AI Blend
+    if (blendTag) blendTag.textContent = "Context-Aware Dynamic AI Blend";
+    if (inspectBlendTag) inspectBlendTag.textContent = "Context-Aware Dynamic AI Blend";
+    if (popoverBlendedLabel) popoverBlendedLabel.textContent = "Blended";
+
     if (imdLayerBtn) {
       imdLayerBtn.title = "Observed rainfall used for historical verification (IMD 0.25° NCC Pune)";
-      const label = imdLayerBtn.querySelector("span:not(.layer-bullet)");
+      const label = imdLayerBtn.querySelector(".layer-item-label");
       if (label) label.textContent = "IMD Retrospective";
     }
 
     // Update side panel titles
     const regLabel = document.getElementById("summary-region-label");
     if (regLabel) regLabel.textContent = "AP & Telangana Domain";
-    const kicker = document.querySelector(".strip-kicker");
-    if (kicker) kicker.textContent = "WORKSTATION CONSENSUS";
-    const subtext = document.querySelector(".strip-subtext");
-    if (subtext) subtext.textContent = "Combining NOAA GFS and ECMWF IFS into one equal-weight forecast.";
     const mwCtxPeriod = document.getElementById("mw-ctx-period");
-    if (mwCtxPeriod) mwCtxPeriod.textContent = "Jun–Aug 2024";
+    if (mwCtxPeriod) mwCtxPeriod.textContent = "Jun–Aug 2024 Historical Analysis";
 
     updateDateDisplay();
     await loadForecastForDate(state.currentDate);
@@ -1064,18 +1288,113 @@ function updateExtremeEvents(maxFused, visiblePoints) {
 }
 
 /* ========================================================
+   DEDICATED VIEW PANEL UPDATES: WEIGHTS & EXTREMES
+   ======================================================== */
+function updateWeightsModeView() {
+  if (!state.currentGridData || !state.currentGridData.points) return;
+  const pts = state.currentGridData.points;
+  const n = pts.length;
+  if (!n) return;
+
+  const isLive = state.operationalMode === "live";
+  const sumGfs = isLive ? n * 0.50 : pts.reduce((acc, p) => acc + (p.w_gfs !== undefined ? p.w_gfs : 0.50), 0);
+  const sumEc = isLive ? n * 0.50 : pts.reduce((acc, p) => acc + (p.w_ecmwf !== undefined ? p.w_ecmwf : 0.50), 0);
+  const sumEntropy = isLive ? n * 0.693 : pts.reduce((acc, p) => acc + (p.weight_entropy !== undefined ? p.weight_entropy : 0.693), 0);
+  const sumAi = isLive ? 0.00 : pts.reduce((acc, p) => acc + (p.delta_w_ai !== undefined ? p.delta_w_ai : Math.abs((p.w_gfs || 0.5) - 0.5)), 0);
+
+  const meanGfs = (sumGfs / n).toFixed(3);
+  const meanEc = (sumEc / n).toFixed(3);
+  const meanEntropy = (sumEntropy / n).toFixed(3);
+  const meanAi = (sumAi / n).toFixed(3);
+
+  const gfsDominant = isLive ? 0 : pts.filter(p => (p.w_gfs || 0.5) > 0.55).length;
+  const ecDominant = isLive ? 0 : pts.filter(p => (p.w_ecmwf || 0.5) > 0.55).length;
+  const consensus = isLive ? n : n - gfsDominant - ecDominant;
+
+  const pctGfs = ((gfsDominant / n) * 100).toFixed(1);
+  const pctEc = ((ecDominant / n) * 100).toFixed(1);
+  const pctConsensus = ((consensus / n) * 100).toFixed(1);
+
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl("weights-mode-mean-gfs", meanGfs);
+  setEl("weights-mode-mean-ec", meanEc);
+  setEl("weights-mode-mean-entropy", meanEntropy);
+  setEl("weights-mode-mean-ai", meanAi);
+  setEl("weights-mode-pct-gfs", `${pctGfs}%`);
+  setEl("weights-mode-pct-ec", `${pctEc}%`);
+  setEl("weights-mode-pct-consensus", `${pctConsensus}%`);
+  setEl("weights-mode-dominant-label", isLive ? "Consensus (50/50)" : (parseFloat(pctEc) >= parseFloat(pctGfs) ? `ECMWF (${pctEc}%)` : `GFS (${pctGfs}%)`));
+
+  const barGfs = document.getElementById("weights-bar-gfs");
+  const barCon = document.getElementById("weights-bar-consensus");
+  const barEc = document.getElementById("weights-bar-ec");
+  if (barGfs) barGfs.style.width = `${pctGfs}%`;
+  if (barCon) barCon.style.width = `${pctConsensus}%`;
+  if (barEc) barEc.style.width = `${pctEc}%`;
+}
+
+async function updateExtremesModeView() {
+  if (!state.currentGridData || !state.currentGridData.points) return;
+  const pts = state.currentGridData.points;
+  const maxRain = Math.max(...pts.map(p => p.fused_mm || 0));
+  const elRainVal = document.getElementById("ext-rain-forecast-val");
+  const elRainStatus = document.getElementById("ext-rain-status");
+  const elRainAggr = document.getElementById("ext-rain-agreement");
+  if (elRainVal) elRainVal.textContent = `${maxRain.toFixed(1)} mm (Domain Peak)`;
+  if (elRainStatus) {
+    if (maxRain >= 115.6) {
+      elRainStatus.className = "extreme-badge status-extreme";
+      elRainStatus.textContent = "Very Heavy (Orange)";
+    } else if (maxRain >= 64.5) {
+      elRainStatus.className = "extreme-badge status-warning";
+      elRainStatus.textContent = "Heavy (Yellow)";
+    } else {
+      elRainStatus.className = "extreme-badge status-normal";
+      elRainStatus.textContent = "Normal (< 64.5 mm)";
+    }
+  }
+
+  // Count alerts
+  if (state.operationalMode === "retrospective") {
+    try {
+      const res = await fetch(`/api/v2/extremes/summary?date=${state.currentDate}&lead=${state.activeLead || 24}`);
+      const data = await res.json();
+      if (data.status === "SUCCESS" && data.summary) {
+        const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        setEl("extremes-mode-active-count", data.summary.active_alerts_count);
+        setEl("extremes-mode-unanimous-count", data.summary.unanimous_exceedance_count);
+        setEl("extremes-mode-divergent-count", data.summary.divergent_exceedance_count);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch extremes summary:", e);
+    }
+  } else {
+    // In live mode, calculate from active points
+    const activeAlerts = pts.filter(p => (p.fused_mm || 0) >= 15.6).length;
+    const unanimous = pts.filter(p => (p.gfs_mm || 0) >= 15.6 && (p.ecmwf_mm || 0) >= 15.6).length;
+    const divergent = activeAlerts - unanimous;
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setEl("extremes-mode-active-count", activeAlerts);
+    setEl("extremes-mode-unanimous-count", unanimous);
+    setEl("extremes-mode-divergent-count", Math.max(0, divergent));
+  }
+}
+
+/* ========================================================
    METEOROLOGICAL COLOR CALIBRATION
    ======================================================== */
 function getPointColorAndOpacity(point) {
   const layer = state.activeLayer;
 
+  // 1. Empirical Confidence
   if (layer === "confidence") {
     const confItem = PALETTES.confidence.find((c) => c.key === point.confidence_class);
     return { color: confItem ? confItem.color : "#94a3b8", opacity: 0.85 };
   }
 
+  // 2. Inter-Model Disagreement
   if (layer === "disagreement") {
-    const val = point.disagreement_mm;
+    const val = point.disagreement !== undefined ? point.disagreement : point.disagreement_mm;
     for (const item of PALETTES.disagreement) {
       if (val >= item.min) {
         return { color: item.color, opacity: val < 0.11 ? 0.2 : 0.85 };
@@ -1084,14 +1403,93 @@ function getPointColorAndOpacity(point) {
     return { color: "#a5b4fc", opacity: 0.3 };
   }
 
-  // Rainfall layers: fused, gfs, ecmwf, imd
-  let val = point.fused_mm;
-  if (layer === "gfs") val = point.gfs_mm;
-  else if (layer === "ecmwf") val = point.ecmwf_mm;
-  else if (layer === "imd") {
-    val = point.imd_mm !== null ? point.imd_mm : 0.0;
+  // 3. Model Weight Maps
+  if (layer === "w_gfs") {
+    const val = point.w_gfs !== undefined ? point.w_gfs : 0.50;
+    for (const item of PALETTES.weights) {
+      if (val >= item.min) {
+        return { color: item.color, opacity: 0.88, val: val };
+      }
+    }
+    return { color: "#0c4a6e", opacity: 0.85, val: val };
   }
 
+  if (layer === "w_ecmwf") {
+    const val = point.w_ecmwf !== undefined ? point.w_ecmwf : 0.50;
+    for (const item of PALETTES.weights) {
+      if (val >= item.min) {
+        return { color: item.color, opacity: 0.88, val: val };
+      }
+    }
+    return { color: "#0c4a6e", opacity: 0.85, val: val };
+  }
+
+  // 4. Dominant Model Distribution
+  if (layer === "dominant_model") {
+    const dom = point.dominant_model || "Consensus";
+    if (dom.includes("GFS")) {
+      return { color: "#0284c7", opacity: 0.88 }; // GFS blue
+    } else if (dom.includes("ECMWF")) {
+      return { color: "#d97706", opacity: 0.88 }; // ECMWF amber
+    } else {
+      return { color: "#0d9488", opacity: 0.85 }; // Balanced teal
+    }
+  }
+
+  // 5. Shannon Weight Entropy
+  if (layer === "weight_entropy") {
+    const val = point.weight_entropy !== undefined ? point.weight_entropy : 0.693;
+    for (const item of PALETTES.entropy) {
+      if (val >= item.min) {
+        return { color: item.color, opacity: 0.85, val: val };
+      }
+    }
+    return { color: "#7e22ce", opacity: 0.85, val: val };
+  }
+
+  // 6. Extreme Guidance Alerts
+  if (layer === "extreme_guidance") {
+    const ext = point.extreme_guidance;
+    if (ext && ext.is_exceeded) {
+      const score = ext.severity_score || 1;
+      if (score >= 3) return { color: "#7e22ce", opacity: 0.95 };
+      if (score === 2) return { color: "#dc2626", opacity: 0.90 };
+      if (score === 1) return { color: "#ea580c", opacity: 0.88 };
+      return { color: "#f59e0b", opacity: 0.85 };
+    }
+    return { color: "rgba(16, 185, 129, 0.2)", opacity: 0.25 };
+  }
+
+  // 7. Forecast Layers (blended, fused, gfs, ecmwf, imd)
+  let val = point.blend_val !== undefined ? point.blend_val : point.fused_mm;
+  if (layer === "fused") val = point.baseline_val !== undefined ? point.baseline_val : point.fused_mm;
+  else if (layer === "gfs") val = point.gfs_val !== undefined ? point.gfs_val : point.gfs_mm;
+  else if (layer === "ecmwf") val = point.ecmwf_val !== undefined ? point.ecmwf_val : point.ecmwf_mm;
+  else if (layer === "imd") {
+    val = point.obs_val !== undefined ? point.obs_val : (point.imd_mm !== null ? point.imd_mm : 0.0);
+  }
+
+  // Temperature Variable Palette
+  if (state.activeVariable === "temperature") {
+    for (const item of PALETTES.temperature) {
+      if (val >= item.min) {
+        return { color: item.color, opacity: 0.85, val: val };
+      }
+    }
+    return { color: "#3b82f6", opacity: 0.85, val: val };
+  }
+
+  // Wind Variable Palette
+  if (state.activeVariable === "wind") {
+    for (const item of PALETTES.wind) {
+      if (val >= item.min) {
+        return { color: item.color, opacity: val < 10.0 ? 0.25 : 0.85, val: val };
+      }
+    }
+    return { color: "#10b981", opacity: 0.3, val: val };
+  }
+
+  // Rainfall Variable Palette
   for (const item of PALETTES.rain) {
     if (val >= item.min) {
       return {
@@ -1206,13 +1604,20 @@ function renderGrid() {
     });
 
     // Meteorological tooltip
-    let layerValText = `<strong>${pt.fused_mm} mm</strong> (Equal-Weight Fused)`;
-    if (state.activeLayer === "gfs") layerValText = `<strong>${pt.gfs_mm} mm</strong> (NOAA GFS)`;
-    else if (state.activeLayer === "ecmwf") layerValText = `<strong>${pt.ecmwf_mm} mm</strong> (ECMWF IFS)`;
-    else if (state.activeLayer === "disagreement") layerValText = `<strong>${pt.disagreement_mm} mm</strong> (Spread D)`;
+    const unit = state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm";
+    let layerValText = `<strong>${pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm} ${unit}</strong> (AI Blend)`;
+    if (state.activeLayer === "fused") layerValText = `<strong>${pt.baseline_val !== undefined ? pt.baseline_val : pt.fused_mm} ${unit}</strong> (50/50 Baseline)`;
+    else if (state.activeLayer === "gfs") layerValText = `<strong>${pt.gfs_val !== undefined ? pt.gfs_val : pt.gfs_mm} ${unit}</strong> (NOAA GFS)`;
+    else if (state.activeLayer === "ecmwf") layerValText = `<strong>${pt.ecmwf_val !== undefined ? pt.ecmwf_val : pt.ecmwf_mm} ${unit}</strong> (ECMWF IFS)`;
+    else if (state.activeLayer === "w_gfs") layerValText = `<strong>w_GFS: ${(pt.w_gfs || 0.5).toFixed(3)}</strong>`;
+    else if (state.activeLayer === "w_ecmwf") layerValText = `<strong>w_EC: ${(pt.w_ecmwf || 0.5).toFixed(3)}</strong>`;
+    else if (state.activeLayer === "dominant_model") layerValText = `<strong>${pt.dominant_model || 'Consensus'}</strong>`;
+    else if (state.activeLayer === "weight_entropy") layerValText = `<strong>H: ${(pt.weight_entropy || 0.693).toFixed(3)} nats</strong>`;
+    else if (state.activeLayer === "extreme_guidance") layerValText = pt.extreme_guidance ? `<strong>${pt.extreme_guidance.warning_level}</strong> (${pt.extreme_guidance.model_agreement})` : "Normal";
+    else if (state.activeLayer === "disagreement") layerValText = `<strong>${pt.disagreement_mm} ${unit}</strong> (Spread D)`;
     else if (state.activeLayer === "confidence") layerValText = `<strong>${pt.confidence_class}</strong>`;
     else if (state.activeLayer === "imd") {
-      layerValText = pt.imd_mm !== null ? `<strong>${pt.imd_mm} mm</strong> (IMD Obs)` : "IMD Pending";
+      layerValText = pt.imd_mm !== null ? `<strong>${pt.imd_mm} ${unit}</strong> (IMD Obs)` : "IMD Pending";
     }
 
     hitRect.bindTooltip(`
@@ -1222,7 +1627,7 @@ function renderGrid() {
         </div>
         <div>Reading: ${layerValText}</div>
         <div style="margin-top: 2px; font-size: 10px; color: #475569;">
-          Confidence: <strong>${pt.confidence_class}</strong> (D: ${pt.disagreement_mm} mm)
+          Weights: GFS ${(pt.w_gfs || 0.5).toFixed(2)} / EC ${(pt.w_ecmwf || 0.5).toFixed(2)} &bull; ${pt.confidence_class}
         </div>
       </div>
     `, { sticky: true, opacity: 0.95 });
@@ -1268,19 +1673,22 @@ function updateLegend() {
   const container = document.getElementById("map-legend");
   if (!container) return;
 
-  // 3D Specific Analytical Legend (Section 15)
+  const varUnit = state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm / 24h";
+
+  // 3D Specific Analytical Legend
   if (state.viewDimension === "3d") {
     if (state.threeMode === "rain") {
       let html = `
-        <div class="legend-title">3D PRECIPITATION</div>
+        <div class="legend-title">3D ${state.activeVariable.toUpperCase()}</div>
         <div class="legend-3d-dims">
-          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">Forecast rainfall (mm / 24h)</span></div>
-          <div class="dim-row"><span class="dim-k">COLOR:</span><span class="dim-v">Rainfall intensity</span></div>
+          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">Forecast magnitude (${varUnit})</span></div>
+          <div class="dim-row"><span class="dim-k">COLOR:</span><span class="dim-v">Intensity</span></div>
           <div class="dim-row"><span class="dim-k">GRID:</span><span class="dim-v">Native 0.25° forecast field (791 cells)</span></div>
         </div>
         <div class="legend-items">
       `;
-      PALETTES.rain.forEach((item) => {
+      const pal = state.activeVariable === "temperature" ? PALETTES.temperature : state.activeVariable === "wind" ? PALETTES.wind : PALETTES.rain;
+      pal.forEach((item) => {
         html += `
           <div class="legend-row">
             <span class="legend-swatch" style="background: ${item.color};"></span>
@@ -1290,16 +1698,16 @@ function updateLegend() {
       });
       html += `</div>`;
       if (state.threeShowLowConf) {
-        html += `<div style="margin-top: 6px; padding: 4px 6px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; font-size: 0.65rem; color: #fde68a;"><strong>LOW-CONFIDENCE OVERLAY:</strong> D &ge; 2.06 mm</div>`;
+        html += `<div style="margin-top: 6px; padding: 4px 6px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; font-size: 0.65rem; color: #fde68a;"><strong>LOW-CONFIDENCE OVERLAY:</strong> D &ge; 2.06</div>`;
       }
-      html += `<div class="legend-3d-note">Height represents forecast rainfall, not terrain elevation. (sqrt display transform)</div>`;
+      html += `<div class="legend-3d-note">Height represents forecast field value, not terrain elevation.</div>`;
       container.innerHTML = html;
       return;
     } else {
       let html = `
         <div class="legend-title">3D MODEL DISAGREEMENT</div>
         <div class="legend-3d-dims">
-          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">|GFS − ECMWF| (mm)</span></div>
+          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">|GFS − ECMWF| (${varUnit})</span></div>
           <div class="dim-row"><span class="dim-k">COLOR:</span><span class="dim-v">Model disagreement</span></div>
           <div class="dim-row"><span class="dim-k">GRID:</span><span class="dim-v">Native 0.25° forecast field (791 cells)</span></div>
           <div class="dim-row"><span class="dim-k">INTERPRET:</span><span class="dim-v">Higher disagreement indicates lower empirical confidence</span></div>
@@ -1315,10 +1723,6 @@ function updateLegend() {
         `;
       });
       html += `</div>`;
-      if (state.threeShowLowConf) {
-        html += `<div style="margin-top: 6px; padding: 4px 6px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; font-size: 0.65rem; color: #fde68a;"><strong>LOW-CONFIDENCE OVERLAY:</strong> D &ge; 2.06 mm</div>`;
-      }
-      html += `<div class="legend-3d-note">Historical evaluation found a positive association between model disagreement and forecast error magnitude.</div>`;
       container.innerHTML = html;
       return;
     }
@@ -1326,26 +1730,56 @@ function updateLegend() {
 
   // 2D Map Legend
   const layer = state.activeLayer;
-  let title = "EQUAL-WEIGHT FUSION (50% GFS + 50% ECMWF)";
+  let title = "DYNAMIC AI BLEND";
   let items = [];
 
-  if (layer === "fused") {
-    title = "EQUAL-WEIGHT FUSION (50% GFS + 50% ECMWF)";
-    items = PALETTES.rain;
+  const varPal = state.activeVariable === "temperature" ? PALETTES.temperature : state.activeVariable === "wind" ? PALETTES.wind : PALETTES.rain;
+
+  if (layer === "blended") {
+    title = `DYNAMIC AI BLEND (${varUnit})`;
+    items = varPal;
+  } else if (layer === "fused") {
+    title = `50/50 EQUAL-WEIGHT BASELINE (${varUnit})`;
+    items = varPal;
   } else if (layer === "gfs") {
-    title = "NOAA GFS Forecast (mm)";
-    items = PALETTES.rain;
+    title = `NOAA GFS Forecast (${varUnit})`;
+    items = varPal;
   } else if (layer === "ecmwf") {
-    title = "ECMWF IFS Forecast (mm)";
-    items = PALETTES.rain;
+    title = `ECMWF IFS Forecast (${varUnit})`;
+    items = varPal;
+  } else if (layer === "w_gfs") {
+    title = "GFS SIMPLEX WEIGHT (w_GFS)";
+    items = PALETTES.weights;
+  } else if (layer === "w_ecmwf") {
+    title = "ECMWF SIMPLEX WEIGHT (w_ECMWF)";
+    items = PALETTES.weights;
+  } else if (layer === "dominant_model") {
+    title = "DOMINANT NWP MODEL";
+    items = [
+      { color: "#0284c7", label: "NOAA GFS Dominant (w > 0.55)" },
+      { color: "#d97706", label: "ECMWF IFS Dominant (w > 0.55)" },
+      { color: "#0d9488", label: "Balanced Consensus (0.45 ≤ w ≤ 0.55)" }
+    ];
+  } else if (layer === "weight_entropy") {
+    title = "SHANNON WEIGHT ENTROPY H(s) (nats)";
+    items = PALETTES.entropy;
+  } else if (layer === "extreme_guidance") {
+    title = "EXTREME WEATHER GUIDANCE (Deterministic)";
+    items = [
+      { color: "#7e22ce", label: "Extreme Warning (Severe Exceedance)" },
+      { color: "#dc2626", label: "Warning (High Severity)" },
+      { color: "#ea580c", label: "Alert (Moderate Severity)" },
+      { color: "#f59e0b", label: "Watch (Light / Marginal)" },
+      { color: "rgba(16, 185, 129, 0.4)", label: "Below Warning Threshold (Normal)" }
+    ];
   } else if (layer === "imd") {
-    title = "IMD Retrospective Observation (mm)";
-    items = PALETTES.rain;
+    title = `IMD Retrospective Observation (${varUnit})`;
+    items = varPal;
   } else if (layer === "confidence") {
     title = "EMPIRICAL CONFIDENCE REGIMES";
     items = PALETTES.confidence.map((c) => ({ color: c.color, label: c.label }));
   } else if (layer === "disagreement") {
-    title = "MODEL DISAGREEMENT D = |GFS − ECMWF| (mm)";
+    title = `MODEL DISAGREEMENT D = |GFS − ECMWF| (${varUnit})`;
     items = PALETTES.disagreement;
   }
 
@@ -1419,82 +1853,175 @@ function inspectCell(pt) {
     document.getElementById("inspect-dates").textContent = `Forecast: ${state.currentDate} (00 UTC Cycle, +24h Lead)`;
   }
 
+  // Dynamic Variable Kicker & Unit
+  const varUnit = pt.unit || (state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm");
+  const kickerElText = state.activeVariable === "temperature"
+    ? "24-HOUR DYNAMICALLY BLENDED 2M TEMPERATURE"
+    : state.activeVariable === "wind"
+    ? "24-HOUR DYNAMICALLY BLENDED 10M WIND SPEED"
+    : "24-HOUR DYNAMICALLY BLENDED PRECIPITATION";
+  const varKickerEl = document.getElementById("inspect-var-kicker");
+  if (varKickerEl) varKickerEl.textContent = kickerElText;
+  const varUnitEl = document.getElementById("inspect-var-unit");
+  if (varUnitEl) varUnitEl.textContent = varUnit;
+
   // Forecast Hero Reading
-  document.getElementById("inspect-fused-val").textContent = pt.fused_mm.toFixed(2);
-  document.getElementById("inspect-regime-tag").textContent = pt.predicted_regime || "Rainfall";
+  const valHero = pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm;
+  const inspectFusedVal = document.getElementById("inspect-fused-val");
+  if (inspectFusedVal) inspectFusedVal.textContent = Number(valHero).toFixed(2);
+  const inspectBlendTag = document.getElementById("inspect-blend-tag");
+  if (inspectBlendTag) {
+    inspectBlendTag.textContent = state.operationalMode === "live" ? "50/50 Operational Reference" : "Context-Aware Dynamic AI Blend";
+  }
+
+  // Learned Blending Weights & Dominant Model
+  const wGfs = pt.w_gfs !== undefined ? pt.w_gfs : 0.50;
+  const wEc = pt.w_ecmwf !== undefined ? pt.w_ecmwf : 0.50;
+
+  const inspectWeightGfs = document.getElementById("inspect-weight-gfs");
+  if (inspectWeightGfs) inspectWeightGfs.textContent = wGfs.toFixed(2);
+  const inspectWeightEc = document.getElementById("inspect-weight-ec");
+  if (inspectWeightEc) inspectWeightEc.textContent = wEc.toFixed(2);
+  const inspectWbarGfs = document.getElementById("inspect-wbar-gfs");
+  if (inspectWbarGfs) inspectWbarGfs.style.width = `${Math.round(wGfs * 100)}%`;
+  const inspectWbarEc = document.getElementById("inspect-wbar-ec");
+  if (inspectWbarEc) inspectWbarEc.style.width = `${Math.round(wEc * 100)}%`;
+  const inspectWeightDominant = document.getElementById("inspect-weight-dominant");
+  if (inspectWeightDominant) {
+    inspectWeightDominant.textContent = state.operationalMode === "live" ? "Consensus (Balanced)" : (pt.dominant_model || (wGfs > 0.55 ? "NOAA GFS Dominant" : wEc > 0.55 ? "ECMWF IFS Dominant" : "Consensus (Balanced)"));
+  }
+
+  const pillWeights = document.getElementById("inspect-weights-pill");
+  if (pillWeights) pillWeights.textContent = `w_GFS: ${wGfs.toFixed(2)} • w_EC: ${wEc.toFixed(2)}`;
+
+  // Context Attribution (Why Did Weights Change?)
+  const attr = pt.attribution || {};
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl("inspect-attr-base", (attr.base_regional_weight !== undefined ? attr.base_regional_weight : 0.50).toFixed(2));
+  setEl("inspect-attr-lead", (attr.lead_time_adjustment !== undefined ? attr.lead_time_adjustment : 0.00).toFixed(2));
+  setEl("inspect-attr-skill", (attr.historical_skill_delta !== undefined ? attr.historical_skill_delta : 0.00).toFixed(4));
+  setEl("inspect-attr-regime", (attr.weather_regime_delta !== undefined ? attr.weather_regime_delta : 0.00).toFixed(2));
+  setEl("inspect-attr-entropy", (pt.weight_entropy !== undefined ? pt.weight_entropy : 0.693).toFixed(3));
+  setEl("inspect-attr-ai", (pt.delta_w_ai !== undefined ? pt.delta_w_ai : Math.abs(wGfs - 0.5)).toFixed(3));
+
+  // Deterministic Extreme Weather Guidance Card
+  const extCard = document.getElementById("inspect-extreme-card");
+  const extBadge = document.getElementById("inspect-extreme-badge");
+  const extLevel = document.getElementById("inspect-extreme-level");
+  const extAgreement = document.getElementById("inspect-extreme-agreement");
+  const extProtocol = document.getElementById("inspect-extreme-protocol");
+
+  if (pt.extreme_guidance) {
+    const eg = pt.extreme_guidance;
+    if (extLevel) extLevel.textContent = eg.warning_level || "Normal";
+    if (extAgreement) extAgreement.textContent = eg.model_agreement || "BELOW_WARNING_THRESHOLD";
+    if (extProtocol) extProtocol.textContent = eg.protocol || "IMD Pune / New Delhi Standard";
+    if (extBadge) {
+      if (eg.is_exceeded) {
+        extBadge.textContent = "WARNING EXCEEDED";
+        extBadge.style.background = "rgba(220, 38, 38, 0.25)";
+        extBadge.style.color = "#f87171";
+        if (extCard) extCard.style.borderLeftColor = "#ef4444";
+      } else {
+        extBadge.textContent = "NO WARNING";
+        extBadge.style.background = "rgba(34, 197, 94, 0.2)";
+        extBadge.style.color = "#4ade80";
+        if (extCard) extCard.style.borderLeftColor = "#10b981";
+      }
+    }
+  }
 
   // Confidence Banner & Categorization (Sections 7, 8, 9)
   const banner = document.getElementById("inspect-conf-banner");
   const titleEl = document.getElementById("inspect-conf-title");
   const subtextEl = document.getElementById("inspect-conf-subtext");
   
-  let regimeRange = "D < 0.11 mm";
-  let histMae = "2.02 mm";
+  let regimeRange = "D < 0.11";
+  let histMae = "2.02";
   let whyExplanation = "";
+
+  const disVal = pt.disagreement !== undefined ? pt.disagreement : pt.disagreement_mm;
+  const gfsVal = pt.gfs_val !== undefined ? pt.gfs_val : pt.gfs_mm;
+  const ecVal = pt.ecmwf_val !== undefined ? pt.ecmwf_val : pt.ecmwf_mm;
 
   if (pt.confidence_class === "High Confidence") {
     if (banner) banner.className = "confidence-status-banner conf-banner-high";
     if (titleEl) titleEl.textContent = "HIGH CONFIDENCE";
     if (subtextEl) subtextEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
-    regimeRange = "D < 0.11 mm";
-    histMae = "2.02 mm";
-    whyExplanation = `GFS (${pt.gfs_mm.toFixed(2)} mm) and ECMWF (${pt.ecmwf_mm.toFixed(2)} mm) are in close consensus for this cell (${pt.disagreement_mm.toFixed(2)} mm disagreement). Historical evaluation found that smaller model disagreement was associated with smaller forecast error magnitude.`;
+    regimeRange = "D < 0.11";
+    histMae = `2.02 ${varUnit}`;
+    whyExplanation = `GFS (${gfsVal.toFixed(2)} ${varUnit}) and ECMWF (${ecVal.toFixed(2)} ${varUnit}) are in close consensus for this cell (${disVal.toFixed(2)} ${varUnit} disagreement). Historical evaluation found that smaller model disagreement was associated with smaller forecast error magnitude.`;
   } else if (pt.confidence_class === "Moderate Confidence") {
     if (banner) banner.className = "confidence-status-banner conf-banner-mod";
     if (titleEl) titleEl.textContent = "MODERATE CONFIDENCE";
     if (subtextEl) subtextEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
-    regimeRange = "0.11 ≤ D < 2.06 mm";
-    histMae = "3.75 mm";
-    whyExplanation = `GFS (${pt.gfs_mm.toFixed(2)} mm) and ECMWF (${pt.ecmwf_mm.toFixed(2)} mm) exhibit moderate difference for this cell (${pt.disagreement_mm.toFixed(2)} mm disagreement). Historical evaluation found that moderate model disagreement was associated with intermediate forecast error magnitude.`;
+    regimeRange = "0.11 ≤ D < 2.06";
+    histMae = `3.75 ${varUnit}`;
+    whyExplanation = `GFS (${gfsVal.toFixed(2)} ${varUnit}) and ECMWF (${ecVal.toFixed(2)} ${varUnit}) exhibit moderate difference for this cell (${disVal.toFixed(2)} ${varUnit} disagreement). Historical evaluation found that moderate model disagreement was associated with intermediate forecast error magnitude.`;
   } else {
     if (banner) banner.className = "confidence-status-banner conf-banner-low";
     if (titleEl) titleEl.textContent = "LOW CONFIDENCE";
     if (subtextEl) subtextEl.textContent = "Confidence is based on historical model disagreement and observed forecast error.";
-    regimeRange = "D ≥ 2.06 mm";
-    histMae = "9.46 mm";
-    whyExplanation = `GFS (${pt.gfs_mm.toFixed(2)} mm) and ECMWF (${pt.ecmwf_mm.toFixed(2)} mm) differ substantially for this cell (${pt.disagreement_mm.toFixed(2)} mm disagreement). Historical evaluation found that larger model disagreement was associated with larger forecast error magnitude.`;
+    regimeRange = "D ≥ 2.06";
+    histMae = `9.46 ${varUnit}`;
+    whyExplanation = `GFS (${gfsVal.toFixed(2)} ${varUnit}) and ECMWF (${ecVal.toFixed(2)} ${varUnit}) differ substantially for this cell (${disVal.toFixed(2)} ${varUnit} disagreement). Historical evaluation found that larger model disagreement was associated with larger forecast error magnitude.`;
   }
 
   // Why This Confidence? Plain-Language Explanation (Section 8)
   const whyBody = document.getElementById("inspect-why-body");
   if (whyBody) whyBody.textContent = whyExplanation;
 
+  // Clean Inspector Confidence Pill & MAE
+  const inspectConfPill = document.getElementById("inspect-conf-pill");
+  const inspectConfText = document.getElementById("inspect-conf-text");
+  const inspectConfMae = document.getElementById("inspect-conf-mae");
+  if (inspectConfText) inspectConfText.textContent = pt.confidence_class ? pt.confidence_class.replace(" Confidence", "") : "Moderate";
+  if (inspectConfPill) {
+    const cClass = pt.confidence_class === "High Confidence" ? "high" : pt.confidence_class === "Low Confidence" ? "low" : "mod";
+    inspectConfPill.className = `conf-badge-pill ${cClass}`;
+  }
+  if (inspectConfMae) {
+    inspectConfMae.textContent = pt.confidence_class === "High Confidence" ? `Hist. MAE: 2.02 ${varUnit}` : pt.confidence_class === "Low Confidence" ? `Hist. MAE: 9.46 ${varUnit}` : `Hist. MAE: 3.75 ${varUnit}`;
+  }
+  const inspectDisUnit = document.getElementById("inspect-dis-unit");
+  if (inspectDisUnit) inspectDisUnit.textContent = varUnit;
+
   // Historical Evidence Grid (Section 9)
   const evD = document.getElementById("inspect-evidence-d");
-  if (evD) evD.textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
+  if (evD) evD.textContent = `${disVal.toFixed(2)} ${varUnit}`;
   const evRegime = document.getElementById("inspect-evidence-regime");
   if (evRegime) evRegime.textContent = regimeRange;
   const evMae = document.getElementById("inspect-evidence-mae");
   if (evMae) evMae.textContent = histMae;
 
   // Visual Model Comparison Bars (Section 11)
-  const maxModelVal = Math.max(pt.gfs_mm, pt.ecmwf_mm, pt.fused_mm, 0.1);
+  const maxModelVal = Math.max(gfsVal, ecVal, valHero, 0.1);
   const barGfs = document.getElementById("inspect-vbar-gfs");
   const barEcmwf = document.getElementById("inspect-vbar-ecmwf");
   const barFused = document.getElementById("inspect-vbar-fused");
-  if (barGfs) barGfs.style.width = `${Math.max(4, Math.min(100, (pt.gfs_mm / maxModelVal) * 100))}%`;
-  if (barEcmwf) barEcmwf.style.width = `${Math.max(4, Math.min(100, (pt.ecmwf_mm / maxModelVal) * 100))}%`;
-  if (barFused) barFused.style.width = `${Math.max(4, Math.min(100, (pt.fused_mm / maxModelVal) * 100))}%`;
+  if (barGfs) barGfs.style.width = `${Math.max(4, Math.min(100, (gfsVal / maxModelVal) * 100))}%`;
+  if (barEcmwf) barEcmwf.style.width = `${Math.max(4, Math.min(100, (ecVal / maxModelVal) * 100))}%`;
+  if (barFused) barFused.style.width = `${Math.max(4, Math.min(100, (valHero / maxModelVal) * 100))}%`;
 
   const vvalGfs = document.getElementById("inspect-gfs-val");
-  if (vvalGfs) vvalGfs.textContent = `${pt.gfs_mm.toFixed(2)} mm`;
+  if (vvalGfs) vvalGfs.textContent = `${gfsVal.toFixed(2)} ${varUnit}`;
   const vvalEcmwf = document.getElementById("inspect-ecmwf-val");
-  if (vvalEcmwf) vvalEcmwf.textContent = `${pt.ecmwf_mm.toFixed(2)} mm`;
+  if (vvalEcmwf) vvalEcmwf.textContent = `${ecVal.toFixed(2)} ${varUnit}`;
   const vvalFused = document.getElementById("inspect-compare-fused");
-  if (vvalFused) vvalFused.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+  if (vvalFused) vvalFused.textContent = `${Number(valHero).toFixed(2)} ${varUnit}`;
 
   const diffTag = document.getElementById("bar-diff-tag");
-  if (diffTag) diffTag.textContent = `Spread D: ${pt.disagreement_mm.toFixed(2)} mm`;
+  if (diffTag) diffTag.textContent = `Spread D: ${disVal.toFixed(2)} ${varUnit}`;
 
   // Discrete Model Readings Grid
   const cardGfs = document.getElementById("card-gfs-val");
-  if (cardGfs) cardGfs.textContent = `${pt.gfs_mm.toFixed(2)} mm`;
+  if (cardGfs) cardGfs.textContent = `${gfsVal.toFixed(2)} ${varUnit}`;
   const cardEcmwf = document.getElementById("card-ecmwf-val");
-  if (cardEcmwf) cardEcmwf.textContent = `${pt.ecmwf_mm.toFixed(2)} mm`;
+  if (cardEcmwf) cardEcmwf.textContent = `${ecVal.toFixed(2)} ${varUnit}`;
   const cardFused = document.getElementById("card-fused-val");
-  if (cardFused) cardFused.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+  if (cardFused) cardFused.textContent = `${Number(valHero).toFixed(2)} ${varUnit}`;
   const cardDis = document.getElementById("card-dis-val");
-  if (cardDis) cardDis.textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
+  if (cardDis) cardDis.textContent = `${disVal.toFixed(2)} ${varUnit}`;
 
   // Retrospective IMD Verification Audit / Live Pending Notice
   const pendingBox = document.getElementById("inspect-live-pending-box");
@@ -1680,6 +2207,18 @@ async function loadVerificationData() {
     }
   } catch (e) {
     console.warn("Bins table API unavailable:", e);
+  }
+
+  try {
+    const resAudit = await fetch("/api/v2/verification/audit");
+    if (resAudit.ok) {
+      const json = await resAudit.json();
+      if (json.status === "SUCCESS" && json.audit) {
+        console.log("Acceptance Gate Audit loaded:", json.audit.acceptance_status);
+      }
+    }
+  } catch (e) {
+    console.warn("Audit API unavailable:", e);
   }
 }
 

@@ -383,30 +383,47 @@ class Meteorological3DViewer {
     return { lat, lon };
   }
 
+  _getPointValue(pt) {
+    if (this.mode === "disagreement") {
+      return pt.disagreement_mm !== undefined ? pt.disagreement_mm : (pt.disagreement !== undefined ? pt.disagreement : 0);
+    }
+    if (this.variable === "temperature") {
+      return pt.blend_val !== undefined ? pt.blend_val : (pt.gfs_val !== undefined ? 0.5 * (pt.gfs_val + pt.ecmwf_val) : (pt.fused_mm || 0));
+    } else if (this.variable === "wind") {
+      return pt.blend_val !== undefined ? pt.blend_val : (pt.fused_mm || 0);
+    } else {
+      return pt.blend_val !== undefined ? pt.blend_val : (pt.fused_mm || 0);
+    }
+  }
+
+  _getVariableUnit() {
+    if (this.variable === "temperature") return "°C";
+    if (this.variable === "wind") return "km/h";
+    return "mm";
+  }
+
   /**
    * Nonlinear Visual Height Scaling
-   * Monotonic square-root transform: displayHeight = 1.25 * sqrt(value)
-   * Prevents 100mm extreme monsoon spikes from needle-distorting the scene
-   * while making 1-5mm light rain distinctly topographical.
+   * Monotonic transform for physical clarity:
    * Numerical forecast values remain completely untouched.
    */
   getDisplayHeight(val) {
-    if (val <= 0.05) return 0.08; // Slight base relief so zero-rain cells are visible on ground
-    return Math.min(18.0, Math.sqrt(val) * 1.30);
+    if (this.mode === "disagreement") {
+      if (val <= 0.02) return 0.08;
+      return Math.min(18.0, Math.sqrt(Math.max(0, val)) * 2.2 + 0.1);
+    }
+    if (this.variable === "temperature") {
+      return Math.max(0.1, Math.min(18.0, (val - 12.0) * 0.45));
+    } else if (this.variable === "wind") {
+      return Math.max(0.1, Math.min(18.0, val * 0.18));
+    } else {
+      if (val <= 0.05) return 0.08;
+      return Math.min(18.0, Math.sqrt(Math.max(0, val)) * 1.30);
+    }
   }
 
   getColorForValue(val) {
-    if (this.mode === "rain") {
-      // PALETTES.rain
-      if (val >= 65.0) return new THREE.Color(0x7e22ce);
-      if (val >= 35.0) return new THREE.Color(0xdc2626);
-      if (val >= 15.0) return new THREE.Color(0xea580c);
-      if (val >= 7.5)  return new THREE.Color(0x16a34a);
-      if (val >= 2.5)  return new THREE.Color(0x2563eb);
-      if (val >= 0.1)  return new THREE.Color(0x7dd3fc);
-      return new THREE.Color(0x334155); // Dry / trace base
-    } else {
-      // PALETTES.disagreement (Sequential Monochromatic Model Disagreement Scale)
+    if (this.mode === "disagreement") {
       if (val >= 10.0) return new THREE.Color(0x312e81);
       if (val >= 5.0)  return new THREE.Color(0x4338ca);
       if (val >= 2.06) return new THREE.Color(0x6366f1);
@@ -414,18 +431,43 @@ class Meteorological3DViewer {
       if (val >= 0.11) return new THREE.Color(0xa5b4fc);
       return new THREE.Color(0xe0e7ff);
     }
+    if (this.variable === "temperature") {
+      if (val >= 45.0) return new THREE.Color(0x7e22ce);
+      if (val >= 42.0) return new THREE.Color(0xdc2626);
+      if (val >= 38.0) return new THREE.Color(0xea580c);
+      if (val >= 32.0) return new THREE.Color(0xf59e0b);
+      if (val >= 24.0) return new THREE.Color(0x10b981);
+      if (val >= 16.0) return new THREE.Color(0x06b6d4);
+      return new THREE.Color(0x3b82f6);
+    } else if (this.variable === "wind") {
+      if (val >= 88.0) return new THREE.Color(0x7e22ce);
+      if (val >= 62.0) return new THREE.Color(0xdc2626);
+      if (val >= 45.0) return new THREE.Color(0xea580c);
+      if (val >= 30.0) return new THREE.Color(0xf59e0b);
+      if (val >= 15.0) return new THREE.Color(0x10b981);
+      return new THREE.Color(0x38bdf8);
+    } else {
+      if (val >= 65.0) return new THREE.Color(0x7e22ce);
+      if (val >= 35.0) return new THREE.Color(0xdc2626);
+      if (val >= 15.0) return new THREE.Color(0xea580c);
+      if (val >= 7.5)  return new THREE.Color(0x16a34a);
+      if (val >= 2.5)  return new THREE.Color(0x2563eb);
+      if (val >= 0.1)  return new THREE.Color(0x7dd3fc);
+      return new THREE.Color(0x334155);
+    }
   }
 
   /* ========================================================
      DATA RENDERING — 3D METEOROLOGICAL SURFACE MESH
      ======================================================== */
-  renderData(gridData, mode = "rain", showLowConfidence = false, activeRegion = "All") {
+  renderData(gridData, mode = "rain", showLowConfidence = false, activeRegion = "All", variable = "precipitation") {
     if (!gridData || !gridData.points) return;
 
     this.gridData = gridData;
     this.mode = mode;
     this.showLowConf = showLowConfidence;
     this.activeRegion = activeRegion;
+    this.variable = variable || "precipitation";
 
     // Clean up existing surface objects
     this._disposeSurface();
@@ -466,7 +508,7 @@ class Meteorological3DViewer {
     const wireframeLines = [];
 
     points.forEach((pt) => {
-      const val = this.mode === "rain" ? pt.fused_mm : pt.disagreement_mm;
+      const val = this._getPointValue(pt);
       const h = this.getDisplayHeight(val);
       const col = this.getColorForValue(val);
 
@@ -729,7 +771,7 @@ class Meteorological3DViewer {
     if (!this.selectReticle) return;
 
     const half = 0.125;
-    const val = this.mode === "rain" ? pt.fused_mm : pt.disagreement_mm;
+    const val = this._getPointValue(pt);
     const h = this.getDisplayHeight(val);
 
     const latMin = pt.lat - half;
@@ -778,6 +820,14 @@ class Meteorological3DViewer {
 
     const confClass = pt.confidence_class || "Confidence";
     const confColor = confClass === "High Confidence" ? "#0d9488" : confClass === "Moderate Confidence" ? "#d97706" : "#86198f";
+    const unit = this._getVariableUnit();
+    const varLabel = this.variable === "temperature" ? "TEMPERATURE" : this.variable === "wind" ? "WIND SPEED" : "RAINFALL";
+
+    const blendVal = this._getPointValue(pt);
+    const gfsVal = pt.gfs_val !== undefined ? pt.gfs_val : (pt.gfs_mm !== undefined ? pt.gfs_mm : 0);
+    const ecVal = pt.ecmwf_val !== undefined ? pt.ecmwf_val : (pt.ecmwf_mm !== undefined ? pt.ecmwf_mm : 0);
+    const disVal = pt.disagreement_mm !== undefined ? pt.disagreement_mm : (pt.disagreement !== undefined ? pt.disagreement : 0);
+    const histMae = pt.expected_mae_mm !== undefined ? pt.expected_mae_mm : (pt.expected_mae !== undefined ? pt.expected_mae : 0);
 
     this.tooltip.innerHTML = `
       <div class="three-tip-header">
@@ -786,24 +836,24 @@ class Meteorological3DViewer {
       </div>
       <div class="three-tip-grid">
         <div class="tip-item">
-          <span class="tip-k">EQUAL-WEIGHT FUSION</span>
-          <span class="tip-v text-accent">${pt.fused_mm.toFixed(2)} mm</span>
+          <span class="tip-k">FORECAST (${varLabel})</span>
+          <span class="tip-v text-accent">${blendVal.toFixed(2)} ${unit}</span>
         </div>
         <div class="tip-item">
           <span class="tip-k">GFS</span>
-          <span class="tip-v">${pt.gfs_mm.toFixed(2)} mm</span>
+          <span class="tip-v">${gfsVal.toFixed(2)} ${unit}</span>
         </div>
         <div class="tip-item">
           <span class="tip-k">ECMWF</span>
-          <span class="tip-v">${pt.ecmwf_mm.toFixed(2)} mm</span>
+          <span class="tip-v">${ecVal.toFixed(2)} ${unit}</span>
         </div>
         <div class="tip-item">
           <span class="tip-k">DISAGREEMENT</span>
-          <span class="tip-v text-warn">${pt.disagreement_mm.toFixed(2)} mm</span>
+          <span class="tip-v text-warn">${disVal.toFixed(2)} ${unit}</span>
         </div>
       </div>
       <div class="three-tip-conf" style="border-left: 3px solid ${confColor};">
-        <span>Empirical Confidence: <strong>${confClass}</strong> (Hist. MAE: ${pt.expected_mae_mm.toFixed(2)} mm)</span>
+        <span>Empirical Confidence: <strong>${confClass}</strong> (Hist. MAE: ${histMae.toFixed(2)} ${unit})</span>
       </div>
       <div class="three-tip-action">Click to inspect cell &amp; view retrospective verification</div>
     `;

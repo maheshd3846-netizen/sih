@@ -13,18 +13,20 @@ if project_root not in sys.path:
 import json
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.utils.logger import setup_logger
 from src.operational.engine import OperationalForecastEngine
 from src.operational.live_engine import LiveForecastEngine
+from src.operational.v2_engine import V2OperationalEngine
 
 logger = setup_logger("OperationalServer")
 
 # Initialize global singleton engines
 ENGINE = OperationalForecastEngine()
 LIVE_ENGINE = LiveForecastEngine()
+V2_ENGINE = V2OperationalEngine()
 
 class OperationalAPIHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -38,13 +40,16 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def _send_json(self, status_code: int, data: Any):
-        body = json.dumps(data, indent=2).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self._send_cors_headers()
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            body = json.dumps(data, indent=2).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            pass
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -63,7 +68,7 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
                 "loaded_samples": len(ENGINE.df_master) if ENGINE.df_master is not None else 0,
                 "available_days": ENGINE.df_master["forecast_day"].nunique() if ENGINE.df_master is not None else 0,
                 "data_integrity": "100% REAL DATA (Zero synthetic/interpolated values)",
-                "timestamp_utc": datetime.utcnow().isoformat() + "Z"
+                "timestamp_utc": datetime.now(timezone.utc).isoformat()
             }
             self._send_json(200, data)
             return
@@ -108,6 +113,20 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
         if path == "/api/live":
             refresh = query.get("refresh", ["false"])[0].lower() in ["true", "1"]
             date_param = query.get("date", [None])[0]
+            var_param = query.get("variable", ["precipitation"])[0]
+            lead_param = int(query.get("lead", [24])[0])
+
+            if var_param != "precipitation" or lead_param != 24:
+                self._send_json(400, {
+                    "status": "LIVE_PARAM_NOT_SUPPORTED",
+                    "mode": "LIVE",
+                    "variable": var_param,
+                    "lead_hours": lead_param,
+                    "error": f"Live stream currently ingests 24h precipitation only. {var_param.capitalize()} at +{lead_param}h is available in Retrospective mode.",
+                    "available_mode": "retrospective"
+                })
+                return
+
             target_d = None
             if date_param:
                 try:
@@ -196,6 +215,162 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(404, {"status": "NOT_FOUND", "error": "Cross-period statistics file not found."})
             return
 
+        # =========================================================================
+        # V2 COMPLIANCE API ENDPOINTS
+        # =========================================================================
+
+        # 10. V2 API: System Health & Multi-Variable Capabilities
+        if path == "/api/v2/system/health":
+            health = {
+                "system_status": "ONLINE",
+                "version": "2.0.0-COMPLIANCE",
+                "ai_blending_engine": "Context-Aware Dynamic AI Simplex Weight Allocator (M_AI)",
+                "weight_constraints": "w_GFS >= 0, w_ECMWF >= 0, w_GFS + w_ECMWF == 1.0 (Strict Convex Simplex)",
+                "supported_variables": ["precipitation", "temperature", "wind"],
+                "supported_leads_hours": [24, 48, 72],
+                "active_domain": "Andhra Pradesh & Telangana (12N-20N, 76E-85E)",
+                "total_terrestrial_cells": 791,
+                "loaded_samples": len(V2_ENGINE.df_master) if V2_ENGINE.df_master is not None else 0,
+                "extreme_guidance_protocols": {
+                    "heavy_rainfall": "IMD Pune 24-Hour Rainfall Classification",
+                    "heat_wave": "IMD New Delhi Heat Wave Standard",
+                    "high_wind": "IMD/WMO Beaufort Wind and Squall Scale"
+                },
+                "probabilistic_policy": "Zero Fabricated Probabilities. Deterministic Exceedance + Agreement Flags.",
+                "data_integrity": "100% REAL NWP DATA. Missing verification tagged PENDING_OBSERVATIONS.",
+                "timestamp_utc": datetime.now(timezone.utc).isoformat()
+            }
+            self._send_json(200, health)
+            return
+
+        # 11. V2 API: Available Dates & Metadata
+        if path == "/api/v2/dates":
+            dates = V2_ENGINE.get_available_dates()
+            self._send_json(200, {"status": "SUCCESS", "dates": dates})
+            return
+
+        # 12. V2 API: Multi-Variable, Multi-Lead Grid Forecast
+        if path == "/api/v2/forecast":
+            date_param = query.get("date", ["2024-07-15"])[0]
+            var_param = query.get("variable", ["precipitation"])[0]
+            lead_param = int(query.get("lead", [24])[0])
+            result = V2_ENGINE.get_grid_forecast(date_param, variable=var_param, lead_hours=lead_param)
+            status_code = 200 if result.get("status") == "SUCCESS" else 400
+            self._send_json(status_code, result)
+            return
+
+        # 13. V2 API: Multi-Variable Point Query
+        if path == "/api/v2/forecast/point":
+            lat = query.get("lat", [None])[0]
+            lon = query.get("lon", [None])[0]
+            date_param = query.get("date", ["2024-07-15"])[0]
+            var_param = query.get("variable", ["precipitation"])[0]
+            lead_param = int(query.get("lead", [24])[0])
+            if lat is None or lon is None:
+                self._send_json(400, {"status": "ERROR", "error": "Missing 'lat' or 'lon' query parameters."})
+                return
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+            except ValueError:
+                self._send_json(400, {"status": "ERROR", "error": "Invalid lat/lon float values."})
+                return
+            result = V2_ENGINE.get_point_forecast(lat_f, lon_f, date_param, variable=var_param, lead_hours=lead_param)
+            status_code = 200 if result.get("status") == "SUCCESS" else 404
+            self._send_json(status_code, result)
+            return
+
+        # 14. V2 API: Dedicated Model Weight Maps
+        if path == "/api/v2/weights/map":
+            date_param = query.get("date", ["2024-07-15"])[0]
+            var_param = query.get("variable", ["precipitation"])[0]
+            lead_param = int(query.get("lead", [24])[0])
+            grid_res = V2_ENGINE.get_grid_forecast(date_param, variable=var_param, lead_hours=lead_param)
+            if grid_res.get("status") != "SUCCESS":
+                self._send_json(400, grid_res)
+                return
+
+            weight_cells = []
+            for p in grid_res["points"]:
+                weight_cells.append({
+                    "lat": p["lat"],
+                    "lon": p["lon"],
+                    "subregion": p["subregion"],
+                    "w_gfs": p["w_gfs"],
+                    "w_ecmwf": p["w_ecmwf"],
+                    "delta_w_ai": p["delta_w_ai"],
+                    "dominant_model": p["dominant_model"],
+                    "weight_entropy": p["weight_entropy"],
+                    "attribution": p["attribution"]
+                })
+
+            self._send_json(200, {
+                "status": "SUCCESS",
+                "forecast_date": date_param,
+                "variable": var_param,
+                "lead_hours": lead_param,
+                "total_cells": len(weight_cells),
+                "summary": grid_res["domain_summary"],
+                "weights": weight_cells
+            })
+            return
+
+        # 15. V2 API: Extreme Weather Guidance Summary
+        if path in ("/api/v2/extremes", "/api/v2/extremes/summary"):
+            date_param = query.get("date", ["2024-07-15"])[0]
+            var_param = query.get("variable", ["precipitation"])[0]
+            lead_param = int(query.get("lead", [24])[0])
+            grid_res = V2_ENGINE.get_grid_forecast(date_param, variable=var_param, lead_hours=lead_param)
+            if grid_res.get("status") != "SUCCESS":
+                self._send_json(400, grid_res)
+                return
+
+            alert_cells = [
+                {
+                    "lat": p["lat"],
+                    "lon": p["lon"],
+                    "subregion": p["subregion"],
+                    "blended_val": p["blended_val"],
+                    "disagreement": p["disagreement"],
+                    "confidence_class": p["confidence_class"],
+                    "extreme_guidance": p["extreme_guidance"]
+                }
+                for p in grid_res["points"]
+                if p.get("extreme_guidance") and p["extreme_guidance"]["severity_score"] >= 1
+            ]
+
+            self._send_json(200, {
+                "status": "SUCCESS",
+                "forecast_date": date_param,
+                "variable": var_param,
+                "lead_hours": lead_param,
+                "summary": grid_res["domain_summary"]["extreme_events"],
+                "active_alerts": alert_cells
+            })
+            return
+
+        # 16. V2 API: Statistical Verification Audit & Acceptance Gate Report
+        if path == "/api/v2/verification/audit":
+            # Load from exp004 benchmark data and run acceptance gate
+            if V2_ENGINE.df_master is not None and not V2_ENGINE.df_master.empty:
+                from src.verification.acceptance_gate import StatisticalAcceptanceGate
+                sub_test = V2_ENGINE.df_master[V2_ENGINE.df_master["period"] == "Period 3 (August)"]
+                if sub_test.empty:
+                    sub_test = V2_ENGINE.df_master
+                gate_res = StatisticalAcceptanceGate.audit_candidate_against_baselines(
+                    test_df=sub_test,
+                    candidate_col="model7_combined",
+                    baseline_col="model3_ensemble_50_50",
+                    variable_name="precipitation",
+                    lead_hours=24,
+                    n_bootstrap=500
+                )
+                self._send_json(200, {"status": "SUCCESS", "audit": gate_res})
+            else:
+                self._send_json(503, {"status": "ERROR", "error": "Evaluation dataset not loaded."})
+            return
+
+
         # 6. Static File Serving (Frontend Dashboard)
         static_dir = os.path.join(project_root, "frontend")
         rel_path = path.lstrip("/")
@@ -216,20 +391,31 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
             content_type = "application/octet-stream"
 
         if os.path.exists(file_to_serve) and os.path.isfile(file_to_serve):
-            with open(file_to_serve, "rb") as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(content)))
-            self._send_cors_headers()
-            self.end_headers()
-            self.wfile.write(content)
+            try:
+                with open(file_to_serve, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(content)))
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(content)
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                pass
         else:
             self._send_json(404, {"status": "NOT_FOUND", "error": f"Path {path} not found."})
 
+class RobustThreadingHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # Ignore client disconnect / connection aborted errors without crashing
+        exc_type, exc_val, _ = sys.exc_info()
+        if exc_type in (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            return
+        super().handle_error(request, client_address)
+
 def run_server(port: int = 8080):
     server_address = ("127.0.0.1", port)
-    httpd = ThreadingHTTPServer(server_address, OperationalAPIHandler)
+    httpd = RobustThreadingHTTPServer(server_address, OperationalAPIHandler)
     logger.info(f"Operational Prototype Server running at http://127.0.0.1:{port}/")
     print(f"Operational Prototype Server running at http://127.0.0.1:{port}/")
     try:
