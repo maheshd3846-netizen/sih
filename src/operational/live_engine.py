@@ -135,97 +135,85 @@ class LiveForecastEngine:
 
     def discover_latest_matching_run(
         self,
-        max_lookback_days: int = 5
+        current_date_utc: Optional[date] = None,
+        max_lookback_days: int = 0
     ) -> Dict[str, Any]:
         """
-        Discovers the newest initialization date for which BOTH NOAA GFS and ECMWF IFS
-        00Z +24h runs exist.
-        
-        Strict Stale-Data Rule:
-        If the latest published cycle has GFS published but ECMWF not published yet,
-        it does NOT silently substitute an older run. It reports LATEST_RUN_NOT_AVAILABLE.
+        Discovers and validates the matching 00 UTC GFS + ECMWF run for LIVE mode.
+
+        STRICT STALENESS HARDENING RULES:
+        1. Evaluates the current UTC date first.
+        2. Only uses the current date's 00 UTC GFS + ECMWF +24h run.
+        3. If today's matching run is unavailable (neither available, GFS only, or ECMWF only),
+           returns explicit unavailable status ('LATEST_RUN_NOT_AVAILABLE' or 'LIVE_DATA_UNAVAILABLE').
+        4. NEVER substitutes yesterday's or any older matching run as the current live forecast.
         """
-        now_utc = datetime.now(timezone.utc)
-        current_date_utc = now_utc.date()
+        if current_date_utc is None:
+            current_date_utc = datetime.now(timezone.utc).date()
 
-        first_probed = None
-        for days_back in range(max_lookback_days + 1):
-            check_date = current_date_utc - timedelta(days=days_back)
-            probe = self.probe_source_availability(check_date)
-            logger.info(f"Probing {check_date}: GFS={probe['gfs_available']}, ECMWF={probe['ecmwf_available']}")
+        probe = self.probe_source_availability(current_date_utc)
+        logger.info(f"Probing current live date {current_date_utc}: GFS={probe['gfs_available']}, ECMWF={probe['ecmwf_available']}")
 
-            if first_probed is None and (probe["gfs_available"] or probe["ecmwf_available"]):
-                first_probed = probe
+        gfs_avail = probe.get("gfs_available", False)
+        ecmwf_avail = probe.get("ecmwf_available", False)
 
-            if probe["gfs_available"] and probe["ecmwf_available"]:
-                # If a newer partial run was detected on a more recent date, we must respect strict matching
-                if first_probed is not None and first_probed["date"] != probe["date"]:
-                    # An in-progress run exists on a newer date where one source is missing
-                    if first_probed["gfs_available"] and not first_probed["ecmwf_available"]:
-                        return {
-                            "status": "LATEST_RUN_NOT_AVAILABLE",
-                            "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
-                            "reason": (
-                                f"NOAA GFS is available for {first_probed['date']} 00 UTC, but the matching "
-                                "ECMWF 00 UTC run has not been published yet. The system will not substitute an older run."
-                            ),
-                            "latest_attempted_date": first_probed["date"],
-                            "source_status": {"gfs": "AVAILABLE", "ecmwf": "UNAVAILABLE"},
-                            "fallback_probed_date": probe["date"],
-                        }
-                    elif first_probed["ecmwf_available"] and not first_probed["gfs_available"]:
-                        return {
-                            "status": "LATEST_RUN_NOT_AVAILABLE",
-                            "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
-                            "reason": (
-                                f"ECMWF IFS is available for {first_probed['date']} 00 UTC, but the matching "
-                                "NOAA GFS 00 UTC run has not been published yet. The system will not substitute an older run."
-                            ),
-                            "latest_attempted_date": first_probed["date"],
-                            "source_status": {"gfs": "UNAVAILABLE", "ecmwf": "AVAILABLE"},
-                            "fallback_probed_date": probe["date"],
-                        }
+        # Case 1: Both sources available for the current date -> SUCCESS
+        if gfs_avail and ecmwf_avail:
+            return {
+                "status": "SUCCESS",
+                "matched_date": current_date_utc.isoformat(),
+                "cycle": DEFAULT_CYCLE,
+                "lead_hours": DEFAULT_LEAD_HOURS,
+                "gfs_available": True,
+                "ecmwf_available": True,
+                "probe_info": probe
+            }
 
-                return {
-                    "status": "SUCCESS",
-                    "matched_date": check_date.isoformat(),
-                    "cycle": DEFAULT_CYCLE,
-                    "lead_hours": DEFAULT_LEAD_HOURS,
-                    "gfs_available": True,
-                    "ecmwf_available": True,
-                    "probe_info": probe
-                }
-            
-            # If the current day has one source available but not the other
-            if days_back == 0 and (probe["gfs_available"] or probe["ecmwf_available"]):
-                if probe["gfs_available"] and not probe["ecmwf_available"]:
-                    return {
-                        "status": "LATEST_RUN_NOT_AVAILABLE",
-                        "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
-                        "reason": (
-                            f"NOAA GFS is available for {check_date.isoformat()} 00 UTC, but the matching "
-                            "ECMWF 00 UTC run has not been published yet. The system will not substitute an older run."
-                        ),
-                        "latest_attempted_date": check_date.isoformat(),
-                        "source_status": {"gfs": "AVAILABLE", "ecmwf": "UNAVAILABLE"}
-                    }
-                elif probe["ecmwf_available"] and not probe["gfs_available"]:
-                    return {
-                        "status": "LATEST_RUN_NOT_AVAILABLE",
-                        "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
-                        "reason": (
-                            f"ECMWF IFS is available for {check_date.isoformat()} 00 UTC, but the matching "
-                            "NOAA GFS 00 UTC run has not been published yet. The system will not substitute an older run."
-                        ),
-                        "latest_attempted_date": check_date.isoformat(),
-                        "source_status": {"gfs": "UNAVAILABLE", "ecmwf": "AVAILABLE"}
-                    }
+        # Case 2: Current date has GFS only (ECMWF pending publication)
+        if gfs_avail and not ecmwf_avail:
+            return {
+                "status": "LATEST_RUN_NOT_AVAILABLE",
+                "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
+                "reason": (
+                    f"NOAA GFS is available for {current_date_utc.isoformat()} 00 UTC, but the matching "
+                    "ECMWF 00 UTC run has not been published yet. The system will not substitute an older run."
+                ),
+                "latest_attempted_date": current_date_utc.isoformat(),
+                "gfs_available": True,
+                "ecmwf_available": False,
+                "source_status": {"gfs": "AVAILABLE", "ecmwf": "UNAVAILABLE"},
+                "probe_info": probe
+            }
 
+        # Case 3: Current date has ECMWF only (GFS pending publication)
+        if ecmwf_avail and not gfs_avail:
+            return {
+                "status": "LATEST_RUN_NOT_AVAILABLE",
+                "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
+                "reason": (
+                    f"ECMWF IFS is available for {current_date_utc.isoformat()} 00 UTC, but the matching "
+                    "NOAA GFS 00 UTC run has not been published yet. The system will not substitute an older run."
+                ),
+                "latest_attempted_date": current_date_utc.isoformat(),
+                "gfs_available": False,
+                "ecmwf_available": True,
+                "source_status": {"gfs": "UNAVAILABLE", "ecmwf": "AVAILABLE"},
+                "probe_info": probe
+            }
+
+        # Case 4: Current date has neither source available yet
         return {
             "status": "LIVE_DATA_UNAVAILABLE",
-            "error": "NO MATCHING OPERATIONAL RUN FOUND",
-            "reason": f"Neither GFS nor ECMWF operational 00Z runs could be verified for the past {max_lookback_days} days.",
-            "source_status": {"gfs": "UNAVAILABLE", "ecmwf": "UNAVAILABLE"}
+            "error": "LATEST FORECAST RUN NOT YET AVAILABLE",
+            "reason": (
+                f"Neither NOAA GFS nor ECMWF IFS operational 00 UTC runs have been published yet for "
+                f"current date {current_date_utc.isoformat()}. The system will not substitute an older run."
+            ),
+            "latest_attempted_date": current_date_utc.isoformat(),
+            "gfs_available": False,
+            "ecmwf_available": False,
+            "source_status": {"gfs": "UNAVAILABLE", "ecmwf": "UNAVAILABLE"},
+            "probe_info": probe
         }
 
     def _get_cache_filepath(self, init_date: Any, cycle: str = DEFAULT_CYCLE, lead_hours: int = DEFAULT_LEAD_HOURS) -> str:

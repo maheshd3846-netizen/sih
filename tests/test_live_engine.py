@@ -303,3 +303,76 @@ def test_retrospective_live_separation(retro_engine, live_engine):
     all_err_null = all(p["fused_error_mm"] is None for p in live_data["points"])
     assert all_err_null is True
     assert live_data["provenance"]["verification_status"] == "NOT_AVAILABLE_FOR_CURRENT_FORECAST"
+
+# 15. Regression Tests for Strict Current-Run-Only Live Discovery Semantics
+def test_strict_current_run_only_discovery(live_engine, monkeypatch):
+    today = date(2026, 9, 28)
+    yesterday = date(2026, 9, 27)
+
+    def create_mock_probe(today_gfs, today_ecmwf, yesterday_gfs=True, yesterday_ecmwf=True):
+        def _probe(d, cycle="00", lead_hours=24, timeout=5):
+            if d == today:
+                return {
+                    "date": d.isoformat(),
+                    "cycle": cycle,
+                    "lead_hours": lead_hours,
+                    "gfs_available": today_gfs,
+                    "ecmwf_available": today_ecmwf,
+                    "gfs_url": "mock_gfs",
+                    "ecmwf_url": "mock_ecmwf",
+                    "status": "PROBED"
+                }
+            elif d == yesterday:
+                return {
+                    "date": d.isoformat(),
+                    "cycle": cycle,
+                    "lead_hours": lead_hours,
+                    "gfs_available": yesterday_gfs,
+                    "ecmwf_available": yesterday_ecmwf,
+                    "gfs_url": "mock_gfs",
+                    "ecmwf_url": "mock_ecmwf",
+                    "status": "PROBED"
+                }
+            return {
+                "date": d.isoformat(),
+                "cycle": cycle,
+                "lead_hours": lead_hours,
+                "gfs_available": False,
+                "ecmwf_available": False,
+                "status": "NEITHER_AVAILABLE"
+            }
+        return _probe
+
+    # Scenario 1: Current date neither available + previous date both available -> MUST return unavailable
+    monkeypatch.setattr(live_engine, "probe_source_availability", create_mock_probe(False, False, True, True))
+    disc1 = live_engine.discover_latest_matching_run(current_date_utc=today)
+    assert disc1["status"] in ["LATEST_RUN_NOT_AVAILABLE", "LIVE_DATA_UNAVAILABLE"]
+    assert disc1.get("matched_date") != yesterday.isoformat()
+    assert "will not substitute an older run" in disc1["reason"]
+
+    # Scenario 2: Current date GFS only + previous date both available -> MUST return unavailable
+    monkeypatch.setattr(live_engine, "probe_source_availability", create_mock_probe(True, False, True, True))
+    disc2 = live_engine.discover_latest_matching_run(current_date_utc=today)
+    assert disc2["status"] in ["LATEST_RUN_NOT_AVAILABLE", "LIVE_DATA_UNAVAILABLE"]
+    assert disc2.get("matched_date") != yesterday.isoformat()
+    assert disc2["source_status"]["gfs"] == "AVAILABLE"
+    assert disc2["source_status"]["ecmwf"] == "UNAVAILABLE"
+    assert "will not substitute an older run" in disc2["reason"]
+
+    # Scenario 3: Current date ECMWF only + previous date both available -> MUST return unavailable
+    monkeypatch.setattr(live_engine, "probe_source_availability", create_mock_probe(False, True, True, True))
+    disc3 = live_engine.discover_latest_matching_run(current_date_utc=today)
+    assert disc3["status"] in ["LATEST_RUN_NOT_AVAILABLE", "LIVE_DATA_UNAVAILABLE"]
+    assert disc3.get("matched_date") != yesterday.isoformat()
+    assert disc3["source_status"]["gfs"] == "UNAVAILABLE"
+    assert disc3["source_status"]["ecmwf"] == "AVAILABLE"
+    assert "will not substitute an older run" in disc3["reason"]
+
+    # Scenario 4: Current date both available -> SUCCESS
+    monkeypatch.setattr(live_engine, "probe_source_availability", create_mock_probe(True, True, True, True))
+    disc4 = live_engine.discover_latest_matching_run(current_date_utc=today)
+    assert disc4["status"] == "SUCCESS"
+    assert disc4["matched_date"] == today.isoformat()
+    assert disc4["gfs_available"] is True
+    assert disc4["ecmwf_available"] is True
+
