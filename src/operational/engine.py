@@ -136,7 +136,7 @@ class OperationalForecastEngine:
                 "predicted_regime": row.get("predicted_regime", "Moderate"),
             }
 
-            # Retrospective ground truth verification if legitimately available
+            # Retrospective IMD verification if legitimately available
             if "imd" in row and not np.isnan(row["imd"]) and row["imd"] >= 0:
                 imd_val = round(float(row["imd"]), 2)
                 pt["imd_mm"] = imd_val
@@ -184,7 +184,7 @@ class OperationalForecastEngine:
                 "nwp_source_1": "NOAA GFS 0.25° oper (APCP surface, 00z cycle, +24h lead)",
                 "nwp_source_2": "ECMWF IFS 0.25° oper (tp surface, 00z cycle, +24h lead)",
                 "fusion_method": "Validated Equal-Weight Static Fusion (50% GFS + 50% ECMWF)",
-                "confidence_engine": "EXP004 Disagreement Bins (Frozen May thresholds: Low < 0.11mm, High >= 2.06mm)",
+                "confidence_engine": "EXP004 Disagreement Bins (Frozen May thresholds: High < 0.11mm, Moderate 0.11–<2.06mm, Low >= 2.06mm)",
                 "verification_source": "IMD 0.25° Gridded Daily Rainfall Analysis",
                 "causal_latency_applied": "1-day observation availability lag strictly maintained",
             },
