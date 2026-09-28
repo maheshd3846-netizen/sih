@@ -18,11 +18,13 @@ from typing import Any, Dict, List, Optional
 
 from src.utils.logger import setup_logger
 from src.operational.engine import OperationalForecastEngine
+from src.operational.live_engine import LiveForecastEngine
 
 logger = setup_logger("OperationalServer")
 
-# Initialize global singleton engine
+# Initialize global singleton engines
 ENGINE = OperationalForecastEngine()
+LIVE_ENGINE = LiveForecastEngine()
 
 class OperationalAPIHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -100,6 +102,61 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
             result = ENGINE.get_point_forecast(lat_f, lon_f, date_param)
             status_code = 200 if result["status"] == "SUCCESS" else 404
             self._send_json(status_code, result)
+            return
+
+        # 4b. API: Live 24-Hour NWP Forecast
+        if path == "/api/live":
+            refresh = query.get("refresh", ["false"])[0].lower() in ["true", "1"]
+            date_param = query.get("date", [None])[0]
+            target_d = None
+            if date_param:
+                try:
+                    target_d = datetime.strptime(date_param, "%Y-%m-%d").date()
+                except ValueError:
+                    self._send_json(400, {
+                        "status": "INVALID_DATE_FORMAT",
+                        "mode": "LIVE",
+                        "error": f"Invalid date: {date_param}. Expected YYYY-MM-DD."
+                    })
+                    return
+
+            res = LIVE_ENGINE.generate_live_forecast(target_date=target_d, force_refresh=refresh)
+            status_code = 200 if res.get("status") == "SUCCESS" else (
+                503 if "UNAVAILABLE" in res.get("status", "") else 400
+            )
+            self._send_json(status_code, res)
+            return
+
+        # 4c. API: Live Forecasting Subsystem Status
+        if path == "/api/live/status":
+            res = LIVE_ENGINE.get_live_status()
+            self._send_json(200, res)
+            return
+
+        # 4d. API: Live Point Forecast Query
+        if path == "/api/live/point":
+            lat = query.get("lat", [None])[0]
+            lon = query.get("lon", [None])[0]
+            if lat is None or lon is None:
+                self._send_json(400, {
+                    "status": "ERROR",
+                    "mode": "LIVE",
+                    "error": "Missing 'lat' or 'lon' query parameters."
+                })
+                return
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+            except ValueError:
+                self._send_json(400, {
+                    "status": "ERROR",
+                    "mode": "LIVE",
+                    "error": "Invalid lat/lon float values."
+                })
+                return
+            res = LIVE_ENGINE.get_point_forecast(lat_f, lon_f)
+            status_code = 200 if res.get("status") == "SUCCESS" else 404
+            self._send_json(status_code, res)
             return
 
         # 5. API: Multi-Period Verification Metrics Summary

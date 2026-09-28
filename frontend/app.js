@@ -6,7 +6,10 @@
 
 // Application State
 const state = {
+  operationalMode: "live", // "live" | "retrospective" (DEFAULT: live)
   currentDate: "2024-07-15",
+  liveForecastData: null,
+  liveStatus: null,
   activeLayer: "fused",
   activeRegion: "All",
   activeView: "forecast",
@@ -94,10 +97,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   init3DViewer();
   setupNavigation();
   setupEventListeners();
-  await loadAvailableDates();
-  await loadForecastForDate(state.currentDate);
   loadBoundaryGeoJSON();
   loadVerificationData();
+  loadAvailableDates(); // Preload for retrospective mode
+  await loadLiveForecast(); // Default: LIVE FORECAST MODE
 });
 
 /* ========================================================
@@ -375,6 +378,12 @@ function switchView(viewName) {
    EVENT LISTENERS SETUP
    ======================================================== */
 function setupEventListeners() {
+  // Mode Switcher Buttons (LIVE FORECAST vs RETROSPECTIVE)
+  const btnLive = document.getElementById("btn-mode-live");
+  const btnRetro = document.getElementById("btn-mode-retro");
+  if (btnLive) btnLive.addEventListener("click", () => setOperationalMode("live"));
+  if (btnRetro) btnRetro.addEventListener("click", () => setOperationalMode("retrospective"));
+
   // Date Picker
   const datePicker = document.getElementById("date-picker");
   datePicker.addEventListener("change", (e) => {
@@ -419,6 +428,14 @@ function setupEventListeners() {
   // Grouped Layer Switcher Buttons (2D Map)
   document.querySelectorAll("#cluster-2d-layers .layer-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (state.operationalMode === "live" && btn.dataset.layer === "imd") {
+        showErrorModal(
+          "IMD OBSERVATIONS NOT AVAILABLE",
+          "Ground observations for the current 24-hour live forecast run have not occurred yet.",
+          "Verification is strictly retrospective. Ground truth observations from IMD will become available only after the 24-hour accumulation window concludes."
+        );
+        return;
+      }
       document.querySelectorAll("#cluster-2d-layers .layer-tab").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       state.activeLayer = btn.dataset.layer;
@@ -608,6 +625,7 @@ async function loadForecastForDate(dateStr) {
     const data = await res.json();
     
     if (data.status === "SUCCESS") {
+      state.retroForecastData = data;
       state.currentGridData = data;
       updateDomainStats(data);
       renderGrid();
@@ -640,6 +658,170 @@ async function loadForecastForDate(dateStr) {
   } catch (err) {
     console.error("Failed to fetch forecast grid:", err);
     showErrorModal("NETWORK ERROR", "Unable to communicate with the operational forecast backend.", "Check if operational server is active on port 8080.");
+  }
+}
+
+/* ========================================================
+   LIVE 24-HOUR NWP FORECAST FETCH & MODE CONTROL
+   ======================================================== */
+async function loadLiveForecast(forceRefresh = false) {
+  try {
+    const url = `/api/live${forceRefresh ? '?refresh=true' : ''}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.status === "SUCCESS") {
+      state.liveForecastData = data;
+      state.currentGridData = data;
+
+      // Extract and format initialization and valid dates
+      const initDate = new Date(data.initialization_time_utc);
+      const validDate = new Date(data.valid_time_utc);
+      const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+      const initFmt = `${String(initDate.getUTCDate()).padStart(2, "0")} ${months[initDate.getUTCMonth()]} ${initDate.getUTCFullYear()} 00 UTC`;
+      const validFmt = `${String(validDate.getUTCDate()).padStart(2, "0")} ${months[validDate.getUTCMonth()]} ${validDate.getUTCFullYear()} 00 UTC`;
+
+      // Update header banner & badges
+      const initEl = document.getElementById("header-live-init");
+      if (initEl) initEl.textContent = initFmt;
+      const validEl = document.getElementById("header-live-valid");
+      if (validEl) validEl.textContent = validFmt;
+      const dockValidEl = document.getElementById("dock-live-valid");
+      if (dockValidEl) dockValidEl.textContent = validFmt;
+
+      // Update strip date badge & summary badge
+      const stripBadge = document.getElementById("strip-date-badge");
+      if (stripBadge) stripBadge.textContent = initFmt;
+      const summaryBadge = document.getElementById("summary-date-badge");
+      if (summaryBadge) summaryBadge.textContent = initFmt;
+
+      // Update side panel titles for live mode
+      const summaryRegion = document.getElementById("summary-region-label");
+      if (summaryRegion) summaryRegion.textContent = "CURRENT 24-HOUR FORECAST";
+      const kicker = document.querySelector(".strip-kicker");
+      if (kicker) kicker.textContent = "CURRENT 24-HOUR NWP CONSENSUS";
+      const subtext = document.querySelector(".strip-subtext");
+      if (subtext) subtext.textContent = "Combining NOAA GFS and ECMWF IFS into one equal-weight forward forecast.";
+      const mwPeriod = document.getElementById("mw-ctx-period");
+      if (mwPeriod) mwPeriod.textContent = "Current Live Run";
+
+      updateDomainStats(data);
+      renderGrid();
+      updateLegend();
+
+      // Update 3D viewer if present
+      if (state.threeViewer && state.viewDimension === "3d") {
+        state.threeViewer.renderData(
+          state.currentGridData,
+          state.threeMode,
+          state.threeShowLowConf,
+          state.activeRegion
+        );
+      }
+
+      // Update inspector if cell selected
+      if (state.selectedPoint) {
+        const updatedPt = data.points.find(
+          (p) => Math.abs(p.lat - state.selectedPoint.lat) < 0.05 && Math.abs(p.lon - state.selectedPoint.lon) < 0.05
+        );
+        if (updatedPt) {
+          inspectCell(updatedPt);
+        } else {
+          clearSelection();
+        }
+      }
+    } else {
+      // Explicit failure state: Never silently fall back to 2024!
+      showErrorModal(
+        data.error || "LATEST FORECAST RUN NOT YET AVAILABLE",
+        data.reason || "The operational NWP sources for today have not both been published yet. The system will not substitute an older run.",
+        "Operational Integrity: Stale historical forecasts are strictly prevented from masquerading as current."
+      );
+    }
+  } catch (err) {
+    console.error("Failed to fetch live forecast:", err);
+    showErrorModal(
+      "NETWORK ERROR",
+      "Unable to communicate with the live forecasting engine.",
+      "Check if operational server is active on port 8080."
+    );
+  }
+}
+
+async function setOperationalMode(mode) {
+  if (state.operationalMode === mode) return;
+  state.operationalMode = mode;
+
+  const btnLive = document.getElementById("btn-mode-live");
+  const btnRetro = document.getElementById("btn-mode-retro");
+  const liveBanner = document.getElementById("live-run-banner");
+  const retroControl = document.getElementById("retro-date-control");
+  const retroBadge = document.getElementById("header-retro-badge");
+  const retroTimeline = document.getElementById("timeline-retro-controls");
+  const liveTimeline = document.getElementById("timeline-live-dock-bar");
+  const imdLayerBtn = document.getElementById("layer-btn-imd");
+
+  if (mode === "live") {
+    if (btnLive) btnLive.classList.add("active");
+    if (btnRetro) btnRetro.classList.remove("active");
+    if (liveBanner) liveBanner.classList.remove("hidden");
+    if (retroControl) retroControl.classList.add("hidden");
+    if (retroBadge) retroBadge.classList.add("hidden");
+    if (retroTimeline) retroTimeline.classList.add("hidden");
+    if (liveTimeline) liveTimeline.classList.remove("hidden");
+
+    // If IMD layer was active, switch to fused forecast
+    if (state.activeLayer === "imd") {
+      state.activeLayer = "fused";
+      document.querySelectorAll("#cluster-2d-layers .layer-tab").forEach(b => b.classList.remove("active"));
+      const fusedBtn = document.getElementById("layer-btn-fused");
+      if (fusedBtn) fusedBtn.classList.add("active");
+    }
+
+    if (imdLayerBtn) {
+      imdLayerBtn.title = "Ground observations are pending for the live forecast run.";
+      const label = imdLayerBtn.querySelector("span:not(.layer-bullet)");
+      if (label) label.textContent = "IMD Retrospective (Pending)";
+    }
+
+    // Update side panel titles
+    const regLabel = document.getElementById("summary-region-label");
+    if (regLabel) regLabel.textContent = "CURRENT 24-HOUR FORECAST";
+    const kicker = document.querySelector(".strip-kicker");
+    if (kicker) kicker.textContent = "CURRENT 24-HOUR NWP CONSENSUS";
+    const subtext = document.querySelector(".strip-subtext");
+    if (subtext) subtext.textContent = "Combining NOAA GFS and ECMWF IFS into one equal-weight forward forecast.";
+    const mwCtxPeriod = document.getElementById("mw-ctx-period");
+    if (mwCtxPeriod) mwCtxPeriod.textContent = "Current Live Run";
+
+    await loadLiveForecast();
+  } else {
+    if (btnLive) btnLive.classList.remove("active");
+    if (btnRetro) btnRetro.classList.add("active");
+    if (liveBanner) liveBanner.classList.add("hidden");
+    if (retroControl) retroControl.classList.remove("hidden");
+    if (retroBadge) retroBadge.classList.remove("hidden");
+    if (retroTimeline) retroTimeline.classList.remove("hidden");
+    if (liveTimeline) liveTimeline.classList.add("hidden");
+
+    if (imdLayerBtn) {
+      imdLayerBtn.title = "Observed rainfall used for historical verification (IMD 0.25° NCC Pune)";
+      const label = imdLayerBtn.querySelector("span:not(.layer-bullet)");
+      if (label) label.textContent = "IMD Retrospective";
+    }
+
+    // Update side panel titles
+    const regLabel = document.getElementById("summary-region-label");
+    if (regLabel) regLabel.textContent = "AP & Telangana Domain";
+    const kicker = document.querySelector(".strip-kicker");
+    if (kicker) kicker.textContent = "WORKSTATION CONSENSUS";
+    const subtext = document.querySelector(".strip-subtext");
+    if (subtext) subtext.textContent = "Combining NOAA GFS and ECMWF IFS into one equal-weight forecast.";
+    const mwCtxPeriod = document.getElementById("mw-ctx-period");
+    if (mwCtxPeriod) mwCtxPeriod.textContent = "Jun–Aug 2024";
+
+    updateDateDisplay();
+    await loadForecastForDate(state.currentDate);
   }
 }
 
@@ -811,6 +993,7 @@ function updateWeightsCard(meanGfs, meanEcmwf, meanFused) {
   setEl("mw-val-ecmwf", `${meanEcmwf} mm`);
   setEl("mw-val-fused-w", `${meanFused} mm`);
   setEl("mw-ctx-region", state.activeRegion === "All" ? "AP & Telangana" : state.activeRegion);
+  setEl("mw-ctx-period", state.operationalMode === "live" ? "Current Live Run" : "Jun–Aug 2024");
 
   // Full weights page
   setEl("wpage-gfs-val", `${meanGfs} mm`);
@@ -1224,7 +1407,17 @@ function inspectCell(pt) {
   const stateName = pt.subregion === "Telangana" ? "Telangana" : "Andhra Pradesh";
   document.getElementById("inspect-subregion").textContent = `${pt.subregion.toUpperCase()} • ${stateName.toUpperCase()}`;
   document.getElementById("inspect-coords").textContent = `${pt.lat.toFixed(2)}°N · ${pt.lon.toFixed(2)}°E`;
-  document.getElementById("inspect-dates").textContent = `Forecast: ${state.currentDate} (00 UTC Cycle, +24h Lead)`;
+
+  if (state.operationalMode === "live") {
+    const initDate = state.currentGridData ? new Date(state.currentGridData.initialization_time_utc) : new Date();
+    const validDate = state.currentGridData ? new Date(state.currentGridData.valid_time_utc) : new Date();
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const initFmt = `${String(initDate.getUTCDate()).padStart(2, "0")} ${months[initDate.getUTCMonth()]} ${initDate.getUTCFullYear()} 00 UTC`;
+    const validFmt = `${String(validDate.getUTCDate()).padStart(2, "0")} ${months[validDate.getUTCMonth()]} ${validDate.getUTCFullYear()} 00 UTC`;
+    document.getElementById("inspect-dates").textContent = `Initialization: ${initFmt} → Valid: ${validFmt} (+24h Lead)`;
+  } else {
+    document.getElementById("inspect-dates").textContent = `Forecast: ${state.currentDate} (00 UTC Cycle, +24h Lead)`;
+  }
 
   // Forecast Hero Reading
   document.getElementById("inspect-fused-val").textContent = pt.fused_mm.toFixed(2);
@@ -1303,37 +1496,68 @@ function inspectCell(pt) {
   const cardDis = document.getElementById("card-dis-val");
   if (cardDis) cardDis.textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
 
-  // Retrospective IMD Verification Audit
-  const verifSection = document.getElementById("inspect-verification-section");
+  // Retrospective IMD Verification Audit / Live Pending Notice
+  const pendingBox = document.getElementById("inspect-live-pending-box");
+  const retroGrid = document.getElementById("inspect-retro-stats-grid");
   const statusBadge = document.getElementById("inspect-verif-status-badge");
-  const statusText = document.getElementById("inspect-verif-status-text");
+  const verifNote = document.getElementById("inspect-verif-note");
+  const kickerEl = document.getElementById("inspect-verif-kicker");
+  const headlineEl = document.getElementById("inspect-verif-headline");
+  const pillEl = document.getElementById("inspect-verif-pill");
 
-  if (pt.imd_mm !== null && pt.imd_mm !== undefined) {
-    verifSection.style.display = "block";
-    document.getElementById("inspect-imd-val").textContent = `${pt.imd_mm.toFixed(2)} mm`;
-    
-    const fusedValElem = document.getElementById("inspect-fused-compare-val");
-    if (fusedValElem) fusedValElem.textContent = `${pt.fused_mm.toFixed(2)} mm`;
-
-    const err = pt.fused_error_mm;
-    
-    document.getElementById("inspect-imd-err").textContent = `${err >= 0 ? "+" : ""}${err.toFixed(2)} mm`;
-
-    statusBadge.className = "audit-verification-status";
-    if (err >= 0) {
-      statusBadge.classList.add("status-over");
-      statusText.textContent = `OVER-FORECAST (+${err.toFixed(2)} mm)`;
-    } else {
-      statusBadge.classList.add("status-under");
-      statusText.textContent = `UNDER-FORECAST (${err.toFixed(2)} mm)`;
+  if (state.operationalMode === "live") {
+    // STRICT LIVE MODE RULE: Do NOT display a fake observation.
+    if (kickerEl) kickerEl.textContent = "CURRENT NWP FORECAST";
+    if (headlineEl) headlineEl.textContent = "IMD Retrospective Verification";
+    if (pillEl) pillEl.textContent = "Live Run (Observations Pending)";
+    if (pendingBox) {
+      pendingBox.classList.remove("hidden");
+      const validTextEl = document.getElementById("inspect-live-valid-text");
+      if (validTextEl && state.currentGridData) {
+        const validDate = new Date(state.currentGridData.valid_time_utc);
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        validTextEl.textContent = `${String(validDate.getUTCDate()).padStart(2, "0")} ${months[validDate.getUTCMonth()]} ${validDate.getUTCFullYear()} 00 UTC`;
+      }
     }
+    if (retroGrid) retroGrid.style.display = "none";
+    if (statusBadge) statusBadge.style.display = "none";
+    if (verifNote) verifNote.style.display = "none";
   } else {
-    document.getElementById("inspect-imd-val").textContent = "Pending Observation";
-    const fusedValElem = document.getElementById("inspect-fused-compare-val");
-    if (fusedValElem) fusedValElem.textContent = `${pt.fused_mm.toFixed(2)} mm`;
-    document.getElementById("inspect-imd-err").textContent = "--";
-    statusBadge.className = "audit-verification-status status-pending";
-    statusText.textContent = "Causal T-1 Ingestion Pending";
+    // RETROSPECTIVE 2024 MODE: Full observation comparison
+    if (kickerEl) kickerEl.textContent = "HISTORICAL OBSERVATION";
+    if (headlineEl) headlineEl.textContent = "IMD Retrospective Verification";
+    if (pillEl) pillEl.textContent = "Strictly Causal (T-1)";
+    if (pendingBox) pendingBox.classList.add("hidden");
+    if (retroGrid) retroGrid.style.display = "grid";
+    if (statusBadge) statusBadge.style.display = "flex";
+    if (verifNote) verifNote.style.display = "block";
+
+    if (pt.imd_mm !== null && pt.imd_mm !== undefined) {
+      document.getElementById("inspect-imd-val").textContent = `${pt.imd_mm.toFixed(2)} mm`;
+      const fusedValElem = document.getElementById("inspect-fused-compare-val");
+      if (fusedValElem) fusedValElem.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+
+      const err = pt.fused_error_mm;
+      document.getElementById("inspect-imd-err").textContent = `${err >= 0 ? "+" : ""}${err.toFixed(2)} mm`;
+
+      statusBadge.className = "audit-verification-status";
+      const statusText = document.getElementById("inspect-verif-status-text");
+      if (err >= 0) {
+        statusBadge.classList.add("status-over");
+        if (statusText) statusText.textContent = `OVER-FORECAST (+${err.toFixed(2)} mm)`;
+      } else {
+        statusBadge.classList.add("status-under");
+        if (statusText) statusText.textContent = `UNDER-FORECAST (${err.toFixed(2)} mm)`;
+      }
+    } else {
+      document.getElementById("inspect-imd-val").textContent = "Pending Observation";
+      const fusedValElem = document.getElementById("inspect-fused-compare-val");
+      if (fusedValElem) fusedValElem.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+      document.getElementById("inspect-imd-err").textContent = "--";
+      statusBadge.className = "audit-verification-status status-pending";
+      const statusText = document.getElementById("inspect-verif-status-text");
+      if (statusText) statusText.textContent = "Causal T-1 Ingestion Pending";
+    }
   }
 
   // Technical Metadata
