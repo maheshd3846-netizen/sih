@@ -243,10 +243,10 @@ function update3DNoticeBanner() {
     noteElem.innerHTML = "<strong>3D RAINFALL:</strong> Height = forecast rainfall magnitude &bull; Color = rainfall intensity (Z-axis is a visualization coordinate only).";
   } else if (state.threeMode === "disagreement") {
     noteElem.innerHTML = "<strong>3D MODEL DISAGREEMENT:</strong> Height = inter-model disagreement &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime under the validated thresholds.";
-  } else if (state.activeVariable === "temperature") {
+  } else if (state.threeMode === "temperature" || state.activeVariable === "temperature") {
     noteElem.innerHTML = "<strong>3D TEMPERATURE:</strong> Height = forecast temperature magnitude &bull; Color = temperature (Z-axis is a visualization coordinate only).";
-  } else if (state.activeVariable === "wind") {
-    noteElem.innerHTML = "<strong>3D WIND:</strong> Height = forecast wind-speed magnitude &bull; Color = wind speed (Z-axis is a visualization coordinate only).";
+  } else if (state.threeMode === "wind" || state.activeVariable === "wind") {
+    noteElem.innerHTML = "<strong>3D WIND:</strong> Height = wind-speed magnitude &bull; Color = wind speed (Z-axis is a visualization coordinate only).";
   }
 }
 
@@ -265,7 +265,7 @@ function updateMapContextBadge() {
     if (state.threeMode === "rain") {
       titleEl.textContent = `3D ${varName} (${leadTag})`;
       unitEl.textContent = varUnit;
-      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} magnitude &bull; Color = intensity. Click any column to inspect.`;
+      helperEl.innerHTML = `Height = forecast rainfall magnitude &bull; Color = intensity. Click any column to inspect.`;
     } else if (state.threeMode === "disagreement") {
       titleEl.textContent = `3D MODEL DISAGREEMENT (${leadTag})`;
       unitEl.textContent = `|GFS − ECMWF| (${varUnit})`;
@@ -273,11 +273,11 @@ function updateMapContextBadge() {
     } else if (state.threeMode === "temperature") {
       titleEl.textContent = `3D ${varName} (${leadTag})`;
       unitEl.textContent = varUnit;
-      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} magnitude &bull; Color = temperature. Click any column to inspect.`;
+      helperEl.innerHTML = `Height = forecast temperature magnitude &bull; Color = temperature. Click any column to inspect.`;
     } else if (state.threeMode === "wind") {
       titleEl.textContent = `3D ${varName} (${leadTag})`;
       unitEl.textContent = varUnit;
-      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} magnitude &bull; Color = wind speed. Click any column to inspect.`;
+      helperEl.innerHTML = `Height = wind-speed magnitude &bull; Color = wind speed. Click any column to inspect.`;
     }
     return;
   }
@@ -1749,11 +1749,11 @@ function updateLegend() {
 
   // 3D Specific Analytical Legend
   if (state.viewDimension === "3d") {
-    if (state.threeMode === "rain") {
+    if (state.threeMode !== "disagreement") {
       let html = `
         <div class="legend-title">3D ${state.activeVariable.toUpperCase()}</div>
         <div class="legend-3d-dims">
-          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">Forecast magnitude (${varUnit})</span></div>
+          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">${state.activeVariable === "temperature" ? "Forecast temperature magnitude (°C)" : state.activeVariable === "wind" ? "Wind-speed magnitude (km/h)" : `Forecast rainfall magnitude (${varUnit})`}</span></div>
           <div class="dim-row"><span class="dim-k">COLOR:</span><span class="dim-v">Intensity</span></div>
           <div class="dim-row"><span class="dim-k">GRID:</span><span class="dim-v">Native 0.25° forecast field (791 cells)</span></div>
         </div>
@@ -1772,7 +1772,7 @@ function updateLegend() {
       if (state.threeShowLowConf) {
         html += `<div style="margin-top: 6px; padding: 4px 6px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; font-size: 0.65rem; color: #fde68a;"><strong>LOW-CONFIDENCE OVERLAY:</strong> D &ge; 2.06</div>`;
       }
-      const legend3dNote = state.activeVariable === "temperature" ? "Height = forecast temperature magnitude." : state.activeVariable === "wind" ? "Height = forecast wind-speed magnitude." : "Height = forecast rainfall magnitude.";
+      const legend3dNote = state.activeVariable === "temperature" ? "Height = forecast temperature magnitude." : state.activeVariable === "wind" ? "Height = wind-speed magnitude." : "Height = forecast rainfall magnitude.";
       html += `<div class="legend-3d-note">${legend3dNote}</div>`;
       container.innerHTML = html;
       return;
@@ -1780,7 +1780,7 @@ function updateLegend() {
       let html = `
         <div class="legend-title">3D MODEL DISAGREEMENT</div>
         <div class="legend-3d-dims">
-          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">|GFS − ECMWF| (${varUnit})</span></div>
+          <div class="dim-row"><span class="dim-k">HEIGHT:</span><span class="dim-v">Inter-model disagreement |GFS − ECMWF| (${varUnit})</span></div>
           <div class="dim-row"><span class="dim-k">COLOR:</span><span class="dim-v">Model disagreement</span></div>
           <div class="dim-row"><span class="dim-k">GRID:</span><span class="dim-v">Native 0.25° forecast field (791 cells)</span></div>
           <div class="dim-row"><span class="dim-k">INTERPRET:</span><span class="dim-v">Higher disagreement indicates lower empirical confidence</span></div>
@@ -1796,6 +1796,7 @@ function updateLegend() {
         `;
       });
       html += `</div>`;
+      html += `<div class="legend-3d-note">Height = inter-model disagreement.</div>`;
       container.innerHTML = html;
       return;
     }
