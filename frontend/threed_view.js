@@ -2,8 +2,12 @@
  * SIH26081 — 3D Meteorological Precipitation & Model Disagreement Engine
  * WebGL / Three.js Workstation-Grade Analytical Surface Visualization
  * Zero ML, 100% Real Data, Native 0.25° Grid Preserved.
- * 
- * Height represents forecast rainfall (or model disagreement), not terrain elevation.
+ *
+ * Vertical height represents forecast magnitude, not geographic elevation:
+ * - Rainfall: Height = forecast rainfall magnitude
+ * - Temperature: Height = forecast temperature magnitude
+ * - Wind: Height = forecast wind-speed magnitude
+ * - Disagreement: Height = inter-model disagreement
  */
 
 class Meteorological3DViewer {
@@ -467,7 +471,15 @@ class Meteorological3DViewer {
     this.mode = mode;
     this.showLowConf = showLowConfidence;
     this.activeRegion = activeRegion;
-    this.variable = variable || "precipitation";
+    if (mode === "temperature") {
+      this.variable = "temperature";
+    } else if (mode === "wind") {
+      this.variable = "wind";
+    } else if (mode === "rain") {
+      this.variable = "precipitation";
+    } else {
+      this.variable = variable || "precipitation";
+    }
 
     // Clean up existing surface objects
     this._disposeSurface();

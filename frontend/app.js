@@ -191,6 +191,12 @@ function switchDimension(dim) {
       threeContainer.classList.remove("hidden");
       threeContainer.style.opacity = "1";
     }
+    if (state.threeMode !== "disagreement") {
+      state.threeMode = state.activeVariable === "temperature" ? "temperature" : state.activeVariable === "wind" ? "wind" : "rain";
+    }
+    document.querySelectorAll("[data-3dmode]").forEach((b) => {
+      b.classList.toggle("active", (b.dataset["3dmode"] || b.getAttribute("data-3dmode")) === state.threeMode);
+    });
     update3DNoticeBanner();
     if (state.threeViewer) {
       state.threeViewer.start();
@@ -199,7 +205,8 @@ function switchDimension(dim) {
           state.currentGridData,
           state.threeMode,
           state.threeShowLowConf,
-          state.activeRegion
+          state.activeRegion,
+          state.activeVariable
         );
         if (state.selectedPoint) {
           state.threeViewer.highlightCell(state.selectedPoint);
@@ -233,9 +240,13 @@ function update3DNoticeBanner() {
   const noteElem = document.getElementById("three-variable-note");
   if (!noteElem) return;
   if (state.threeMode === "rain") {
-    noteElem.innerHTML = "<strong>3D RAINFALL:</strong> Height = forecast rainfall &bull; Color = rainfall intensity (Z-axis is a visualization coordinate only).";
-  } else {
-    noteElem.innerHTML = "<strong>3D MODEL DISAGREEMENT:</strong> Height = |GFS − ECMWF| &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime under the validated thresholds.";
+    noteElem.innerHTML = "<strong>3D RAINFALL:</strong> Height = forecast rainfall magnitude &bull; Color = rainfall intensity (Z-axis is a visualization coordinate only).";
+  } else if (state.threeMode === "disagreement") {
+    noteElem.innerHTML = "<strong>3D MODEL DISAGREEMENT:</strong> Height = inter-model disagreement &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime under the validated thresholds.";
+  } else if (state.activeVariable === "temperature") {
+    noteElem.innerHTML = "<strong>3D TEMPERATURE:</strong> Height = forecast temperature magnitude &bull; Color = temperature (Z-axis is a visualization coordinate only).";
+  } else if (state.activeVariable === "wind") {
+    noteElem.innerHTML = "<strong>3D WIND:</strong> Height = forecast wind-speed magnitude &bull; Color = wind speed (Z-axis is a visualization coordinate only).";
   }
 }
 
@@ -254,11 +265,19 @@ function updateMapContextBadge() {
     if (state.threeMode === "rain") {
       titleEl.textContent = `3D ${varName} (${leadTag})`;
       unitEl.textContent = varUnit;
-      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} &bull; Color = intensity. Click any column to inspect.`;
-    } else {
+      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} magnitude &bull; Color = intensity. Click any column to inspect.`;
+    } else if (state.threeMode === "disagreement") {
       titleEl.textContent = `3D MODEL DISAGREEMENT (${leadTag})`;
       unitEl.textContent = `|GFS − ECMWF| (${varUnit})`;
-      helperEl.innerHTML = "Height = |GFS − ECMWF| &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime.";
+      helperEl.innerHTML = "Height = inter-model disagreement &bull; Color = disagreement intensity. Higher disagreement indicates a lower empirical-confidence regime.";
+    } else if (state.threeMode === "temperature") {
+      titleEl.textContent = `3D ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} magnitude &bull; Color = temperature. Click any column to inspect.`;
+    } else if (state.threeMode === "wind") {
+      titleEl.textContent = `3D ${varName} (${leadTag})`;
+      unitEl.textContent = varUnit;
+      helperEl.innerHTML = `Height = forecast ${varName.toLowerCase()} magnitude &bull; Color = wind speed. Click any column to inspect.`;
     }
     return;
   }
@@ -266,7 +285,7 @@ function updateMapContextBadge() {
   // 2D Map modes
   switch (state.activeLayer) {
     case "blended":
-      titleEl.textContent = `DYNAMIC AI BLEND — ${varName} (${leadTag})`;
+      titleEl.textContent = `CONTEXT-AWARE BLEND — ${varName} (${leadTag})`;
       unitEl.textContent = varUnit;
       helperEl.textContent = "Context-aware simplex weighting (w_GFS · GFS + w_ECMWF · ECMWF). Click any location to inspect.";
       break;
@@ -478,12 +497,24 @@ function setupEventListeners() {
         document.querySelectorAll(".var-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         state.activeVariable = "precipitation";
+        if (state.threeMode !== "disagreement") state.threeMode = "rain";
+        document.querySelectorAll("[data-3dmode]").forEach((b) => {
+          b.classList.toggle("active", (b.dataset["3dmode"] || b.getAttribute("data-3dmode")) === state.threeMode);
+        });
+        update3DNoticeBanner();
         updateMapContextBadge();
         loadLiveForecast();
       } else {
         document.querySelectorAll(".var-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         state.activeVariable = targetVar;
+        if (state.threeMode !== "disagreement") {
+          state.threeMode = targetVar === "precipitation" ? "rain" : targetVar;
+        }
+        document.querySelectorAll("[data-3dmode]").forEach((b) => {
+          b.classList.toggle("active", (b.dataset["3dmode"] || b.getAttribute("data-3dmode")) === state.threeMode);
+        });
+        update3DNoticeBanner();
         updateMapContextBadge();
         if (state.currentGridData) {
           loadForecastForDate(state.currentDate);
@@ -630,23 +661,53 @@ function setupEventListeners() {
   if (btn2D) btn2D.addEventListener("click", () => switchDimension("2d"));
   if (btn3D) btn3D.addEventListener("click", () => switchDimension("3d"));
 
-  // 3D Variable Buttons (RAIN / DISAGREEMENT)
+  // 3D Variable Buttons (RAIN / DISAGREEMENT / TEMPERATURE / WIND)
   document.querySelectorAll("[data-3dmode]").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const target3dMode = btn.dataset["3dmode"] || btn.getAttribute("data-3dmode");
+      if (state.operationalMode === "live" && (target3dMode === "temperature" || target3dMode === "wind")) {
+        showErrorModal(
+          "LIVE INGESTION CONFIGURATION",
+          "Live operational NWP ingestion is currently active for 24-Hour Precipitation (00Z NOAA GFS + 00Z ECMWF IFS).",
+          "For multi-variable (Temperature, Wind Speed) and multi-lead (+48h, +72h) analysis, please switch to Retrospective mode."
+        );
+        document.querySelectorAll("[data-3dmode]").forEach((b) => {
+          b.classList.toggle("active", (b.dataset["3dmode"] || b.getAttribute("data-3dmode")) === state.threeMode);
+        });
+        return;
+      }
+
       document.querySelectorAll("[data-3dmode]").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      state.threeMode = btn.dataset["3dmode"] || btn.getAttribute("data-3dmode");
+      state.threeMode = target3dMode;
+
+      if (target3dMode === "rain") {
+        state.activeVariable = "precipitation";
+        document.querySelectorAll(".var-btn").forEach((b) => b.classList.toggle("active", b.dataset.var === "precipitation"));
+        if (state.operationalMode === "live") loadLiveForecast();
+        else if (state.currentGridData) loadForecastForDate(state.currentDate);
+      } else if (target3dMode === "temperature") {
+        state.activeVariable = "temperature";
+        document.querySelectorAll(".var-btn").forEach((b) => b.classList.toggle("active", b.dataset.var === "temperature"));
+        if (state.currentGridData) loadForecastForDate(state.currentDate);
+      } else if (target3dMode === "wind") {
+        state.activeVariable = "wind";
+        document.querySelectorAll(".var-btn").forEach((b) => b.classList.toggle("active", b.dataset.var === "wind"));
+        if (state.currentGridData) loadForecastForDate(state.currentDate);
+      } else if (target3dMode === "disagreement") {
+        if (state.threeViewer && state.currentGridData) {
+          state.threeViewer.renderData(
+            state.currentGridData,
+            state.threeMode,
+            state.threeShowLowConf,
+            state.activeRegion,
+            state.activeVariable
+          );
+        }
+      }
+
       update3DNoticeBanner();
       updateMapContextBadge();
-      if (state.threeViewer && state.currentGridData) {
-        state.threeViewer.renderData(
-          state.currentGridData,
-          state.threeMode,
-          state.threeShowLowConf,
-          state.activeRegion,
-          state.activeVariable
-        );
-      }
       updateLegend();
     });
   });
@@ -662,7 +723,8 @@ function setupEventListeners() {
           state.currentGridData,
           state.threeMode,
           state.threeShowLowConf,
-          state.activeRegion
+          state.activeRegion,
+          state.activeVariable
         );
       }
       updateLegend();
@@ -706,7 +768,8 @@ function setupEventListeners() {
             state.currentGridData,
             state.threeMode,
             state.threeShowLowConf,
-            state.activeRegion
+            state.activeRegion,
+            state.activeVariable
           );
         }
       }
@@ -825,7 +888,8 @@ async function loadForecastForDate(dateStr) {
           state.currentGridData,
           state.threeMode,
           state.threeShowLowConf,
-          state.activeRegion
+          state.activeRegion,
+          state.activeVariable
         );
       }
 
@@ -928,7 +992,8 @@ async function loadLiveForecast(forceRefresh = false) {
           state.currentGridData,
           state.threeMode,
           state.threeShowLowConf,
-          state.activeRegion
+          state.activeRegion,
+          state.activeVariable
         );
       }
 
@@ -986,10 +1051,17 @@ async function setOperationalMode(mode) {
     if (retroTimeline) retroTimeline.classList.add("hidden");
     if (liveTimeline) liveTimeline.classList.remove("hidden");
 
-    // Scientific labeling: 50/50 Operational Reference (never dynamic AI blend in live mode)
+    // Scientific labeling: 50/50 Operational Reference (never dynamic blend in live mode)
     if (blendTag) blendTag.textContent = "50/50 Operational Reference";
     if (inspectBlendTag) inspectBlendTag.textContent = "50/50 Operational Reference";
     if (popoverBlendedLabel) popoverBlendedLabel.textContent = "50/50 Baseline";
+    // Live mode: explicit GFS/ECMWF weights display
+    const mwGfsPct = document.getElementById("mw-pct-gfs");
+    const mwEcmwfPct = document.getElementById("mw-pct-ecmwf");
+    if (mwGfsPct) mwGfsPct.textContent = "50%";
+    if (mwEcmwfPct) mwEcmwfPct.textContent = "50%";
+    const mwStrategy = document.getElementById("mw-strategy-text");
+    if (mwStrategy) mwStrategy.textContent = "50/50 Operational Reference";
 
     // Enforce live variable & lead buttons to precipitation & 24h
     document.querySelectorAll(".var-btn").forEach((b) => b.classList.toggle("active", b.dataset.var === "precipitation"));
@@ -1027,10 +1099,10 @@ async function setOperationalMode(mode) {
     if (retroTimeline) retroTimeline.classList.remove("hidden");
     if (liveTimeline) liveTimeline.classList.add("hidden");
 
-    // Retrospective labeling: Context-Aware Dynamic AI Blend
-    if (blendTag) blendTag.textContent = "Context-Aware Dynamic AI Blend";
-    if (inspectBlendTag) inspectBlendTag.textContent = "Context-Aware Dynamic AI Blend";
-    if (popoverBlendedLabel) popoverBlendedLabel.textContent = "Blended";
+    // Retrospective labeling: Context-Aware Model Weights
+    if (blendTag) blendTag.textContent = "Context-Aware Model Weights";
+    if (inspectBlendTag) inspectBlendTag.textContent = "Context-Aware Model Weights";
+    if (popoverBlendedLabel) popoverBlendedLabel.textContent = "Context-Aware Weights";
 
     if (imdLayerBtn) {
       imdLayerBtn.title = "Observed rainfall used for historical verification (IMD 0.25° NCC Pune)";
@@ -1605,7 +1677,7 @@ function renderGrid() {
 
     // Meteorological tooltip
     const unit = state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm";
-    let layerValText = `<strong>${pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm} ${unit}</strong> (AI Blend)`;
+    let layerValText = `<strong>${pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm} ${unit}</strong> (Context-Aware Blend)`;
     if (state.activeLayer === "fused") layerValText = `<strong>${pt.baseline_val !== undefined ? pt.baseline_val : pt.fused_mm} ${unit}</strong> (50/50 Baseline)`;
     else if (state.activeLayer === "gfs") layerValText = `<strong>${pt.gfs_val !== undefined ? pt.gfs_val : pt.gfs_mm} ${unit}</strong> (NOAA GFS)`;
     else if (state.activeLayer === "ecmwf") layerValText = `<strong>${pt.ecmwf_val !== undefined ? pt.ecmwf_val : pt.ecmwf_mm} ${unit}</strong> (ECMWF IFS)`;
@@ -1700,7 +1772,8 @@ function updateLegend() {
       if (state.threeShowLowConf) {
         html += `<div style="margin-top: 6px; padding: 4px 6px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; border-radius: 2px; font-size: 0.65rem; color: #fde68a;"><strong>LOW-CONFIDENCE OVERLAY:</strong> D &ge; 2.06</div>`;
       }
-      html += `<div class="legend-3d-note">Height represents forecast field value, not terrain elevation.</div>`;
+      const legend3dNote = state.activeVariable === "temperature" ? "Height = forecast temperature magnitude." : state.activeVariable === "wind" ? "Height = forecast wind-speed magnitude." : "Height = forecast rainfall magnitude.";
+      html += `<div class="legend-3d-note">${legend3dNote}</div>`;
       container.innerHTML = html;
       return;
     } else {
@@ -1730,13 +1803,13 @@ function updateLegend() {
 
   // 2D Map Legend
   const layer = state.activeLayer;
-  let title = "DYNAMIC AI BLEND";
+  let title = "CONTEXT-AWARE BLEND";
   let items = [];
 
   const varPal = state.activeVariable === "temperature" ? PALETTES.temperature : state.activeVariable === "wind" ? PALETTES.wind : PALETTES.rain;
 
   if (layer === "blended") {
-    title = `DYNAMIC AI BLEND (${varUnit})`;
+    title = `CONTEXT-AWARE BLEND (${varUnit})`;
     items = varPal;
   } else if (layer === "fused") {
     title = `50/50 EQUAL-WEIGHT BASELINE (${varUnit})`;
@@ -1871,7 +1944,7 @@ function inspectCell(pt) {
   if (inspectFusedVal) inspectFusedVal.textContent = Number(valHero).toFixed(2);
   const inspectBlendTag = document.getElementById("inspect-blend-tag");
   if (inspectBlendTag) {
-    inspectBlendTag.textContent = state.operationalMode === "live" ? "50/50 Operational Reference" : "Context-Aware Dynamic AI Blend";
+    inspectBlendTag.textContent = state.operationalMode === "live" ? "50/50 Operational Reference" : "Context-Aware Model Weights";
   }
 
   // Learned Blending Weights & Dominant Model
@@ -2319,7 +2392,7 @@ const DEMO_STEPS = [
     step: 6,
     title: "6. 3D Analytical Precipitation & Spread Workstation",
     desc: "Seamlessly toggle between the operational 2D map and the 3D analytical visualization. In 3D RAIN mode, vertical height communicates forecast rainfall (P_fused) over the native 0.25° grid. In 3D DISAGREEMENT mode, vertical height visualizes model divergence |GFS - ECMWF|, immediately exposing low-confidence regimes.",
-    preview: "Height represents forecast variables, not terrain elevation. Click any 3D cell to trigger the full Cell Inspector with dual-model spread and IMD retrospective verification."
+    preview: "Vertical height represents forecast magnitude, not geographic elevation. Click any 3D cell to trigger the full Cell Inspector with dual-model spread and IMD retrospective verification."
   },
   {
     step: 7,

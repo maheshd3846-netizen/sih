@@ -312,13 +312,21 @@
 
             <!-- Three.js WebGL Canvas Container (3D Analytical Layer) -->
             <div id="three-container" class="three-viewport-canvas hidden" aria-label="3D Precipitation Analysis Viewport">
-              
-              <!-- Elevation & Display Scaling Notice (Section 4 & 8) -->
+
+              <!-- 3D Variable Selector (appears in 3D mode) -->
+              <div class="three-mode-controls" role="group" aria-label="3D View Variable" id="three-mode-controls">
+                <button class="three-mode-btn active" data-3dmode="rain" title="3D Rainfall Magnitude">Rainfall</button>
+                <button class="three-mode-btn" data-3dmode="disagreement" title="3D Model Disagreement">Disagreement</button>
+                <button class="three-mode-btn" data-3dmode="temperature" title="3D Temperature Magnitude">Temperature</button>
+                <button class="three-mode-btn" data-3dmode="wind" title="3D Wind Speed Magnitude">Wind</button>
+              </div>
+
+              <!-- Forecast Magnitude & Display Scaling Notice (Section 4 & 8) -->
               <div class="three-scaling-notice" id="three-scaling-notice">
                 <span class="notice-icon">📐</span>
-                <span class="notice-main" id="three-variable-note">Height represents forecast rainfall, not terrain elevation.</span>
+                <span class="notice-main" id="three-variable-note">Height = forecast rainfall magnitude</span>
                 <span class="notice-sep">•</span>
-                <span class="notice-sub">Vertical scaling is a visualization transform only; forecast values remain unchanged.</span>
+                <span class="notice-sub">Vertical height represents forecast magnitude, not geographic elevation. Vertical scaling is a visualization transform only; forecast values remain unchanged.</span>
               </div>
 
               <!-- Lightweight Hover Tooltip (Section 13) -->
@@ -639,7 +647,7 @@
                       <strong id="inspect-attr-entropy">0.693 nats</strong>
                     </div>
                     <div class="tech-row">
-                      <span>AI Adaptation (|Δw|):</span>
+                      <span>Adaptation Magnitude (|Δw|):</span>
                       <strong id="inspect-attr-ai">0.00</strong>
                     </div>
                     <div class="tech-row">
@@ -710,7 +718,7 @@
                 <span class="wm-sub">Domain Distribution</span>
               </div>
               <div class="weights-metric-card">
-                <span class="wm-label">AI Adaptation Magnitude</span>
+                <span class="wm-label">Adaptation Magnitude</span>
                 <div class="wm-val text-purple" id="weights-mode-mean-ai">0.090</div>
                 <span class="wm-sub">Mean $|\Delta w_{\text{AI}}|$ departure</span>
               </div>

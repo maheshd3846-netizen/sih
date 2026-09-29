@@ -10,11 +10,24 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+import ssl
 import urllib.request
 import json
 import hashlib
 from datetime import date
 from typing import Tuple, Dict, Any, Optional
+
+def _get_ssl_context():
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+_SSL_CONTEXT = _get_ssl_context()
 import eccodes
 from src.utils.logger import setup_logger
 
@@ -74,7 +87,7 @@ def download_ecmwf_forecast_day(
 
         logger.info(f"Fetching ECMWF index from {index_url}...")
         req_idx = urllib.request.Request(index_url, headers={"User-Agent": "SIH26081-Research/1.0"})
-        with urllib.request.urlopen(req_idx, timeout=20) as resp:
+        with urllib.request.urlopen(req_idx, timeout=20, context=_SSL_CONTEXT) as resp:
             index_content = resp.read().decode("utf-8")
 
         offset, length = get_ecmwf_tp_byte_range(index_content)
@@ -88,7 +101,7 @@ def download_ecmwf_forecast_day(
                 "User-Agent": "SIH26081-Research/1.0"
             }
         )
-        with urllib.request.urlopen(req_data, timeout=60) as resp:
+        with urllib.request.urlopen(req_data, timeout=60, context=_SSL_CONTEXT) as resp:
             raw_grib = resp.read()
 
         with open(dest_path, "wb") as f:

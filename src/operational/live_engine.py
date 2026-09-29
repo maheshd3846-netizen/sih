@@ -14,8 +14,21 @@ import sys
 import json
 import time
 import urllib.request
+import ssl
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, List, Optional, Tuple
+
+def _get_ssl_context():
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+_SSL_CONTEXT = _get_ssl_context()
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if project_root not in sys.path:
@@ -97,7 +110,7 @@ class LiveForecastEngine:
                 method="HEAD",
                 headers={"User-Agent": "SIH26081-Operational/1.0"}
             )
-            with urllib.request.urlopen(req_gfs, timeout=timeout) as resp:
+            with urllib.request.urlopen(req_gfs, timeout=timeout, context=_SSL_CONTEXT) as resp:
                 gfs_available = (resp.status == 200)
         except Exception:
             gfs_available = False
@@ -111,7 +124,7 @@ class LiveForecastEngine:
                 method="HEAD",
                 headers={"User-Agent": "SIH26081-Operational/1.0"}
             )
-            with urllib.request.urlopen(req_ecmwf, timeout=timeout) as resp:
+            with urllib.request.urlopen(req_ecmwf, timeout=timeout, context=_SSL_CONTEXT) as resp:
                 ecmwf_available = (resp.status == 200)
         except Exception:
             ecmwf_available = False

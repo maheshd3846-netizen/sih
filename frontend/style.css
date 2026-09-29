@@ -2391,7 +2391,51 @@ html, body {
   visibility: hidden;
 }
 
-/* Elevation & Display Scaling Notice (Section 4 & 8) */
+/* 3D Mode & Variable Switcher Controls (Floating Over 3D Canvas) */
+.three-mode-controls {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--radius-xs);
+  padding: 4px 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.three-mode-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.three-mode-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.three-mode-btn.active {
+  background: var(--brand-blue, #0284c7);
+  color: #ffffff;
+  border-color: rgba(56, 189, 248, 0.5);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Forecast Magnitude & Display Scaling Notice (Section 4 & 8) */
 .three-scaling-notice {
   position: absolute;
   top: 66px;
