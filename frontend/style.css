@@ -1,5 +1,5 @@
 /*
-  SIH26081 Precipitation Fusion — Professional Meteorological Workstation Design System
+  AETHERA — Adaptive Multi-Model Weather Intelligence Workstation Design System (SIH26081)
   Clean, restrained, high-density, authoritative geospatial intelligence.
   First-class support: 1366x768, 1440x900, 1920x1080.
 */
@@ -133,17 +133,18 @@ html, body {
 }
 
 /* 1. AERIS Brand Block */
+.top-brand,
 .header-brand-block {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
 /* Distinctive Meteorological Logomark */
 .aeris-logo-mark {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,8 +159,8 @@ html, body {
 }
 
 .aeris-symbol {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: block;
 }
 
@@ -170,7 +171,7 @@ html, body {
 }
 
 .brand-main-title {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 2px;
   background: linear-gradient(90deg, #ffffff 0%, #7dd3fc 60%, #2dd4bf 100%);
@@ -178,6 +179,8 @@ html, body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   text-fill-color: transparent;
+  line-height: 1;
+  margin: 0;
 }
 
 .brand-sub-title {
@@ -528,7 +531,12 @@ html, body {
 .leaflet-map-canvas {
   width: 100%;
   height: 100%;
-  background-color: #0f172a;
+  background-color: #dbe4eb;
+}
+
+.leaflet-image-layer {
+  image-rendering: auto;
+  pointer-events: none;
 }
 
 /* Floating Grouped Layer Toolbar */
@@ -672,21 +680,133 @@ html, body {
   color: #c7d2fe;
 }
 
-/* Floating Meteorological Legend */
+/* Floating Meteorological Legend Card (Professional Color Ramp Bar) */
 .map-floating-legend {
   position: absolute;
   bottom: 56px;
-  left: 12px;
+  left: 14px;
   z-index: 999;
-  background: rgba(15, 23, 42, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  box-shadow: var(--shadow-lg);
-  max-width: 250px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  width: 290px;
+  max-width: 320px;
   pointer-events: auto;
+  font-family: var(--font-sans);
+}
+
+.met-colorbar-card {
+  width: 100%;
+}
+
+.colorbar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.colorbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.colorbar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+  flex-shrink: 0;
+}
+
+.colorbar-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.colorbar-unit {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.colorbar-ramp-container {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  margin-bottom: 3px;
+}
+
+.colorbar-ramp-gradient {
+  width: 100%;
+  height: 100%;
+}
+
+.colorbar-tick-marks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.colorbar-tick-marks .c-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.9);
+}
+
+.colorbar-tick-labels {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.60rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 2px;
+}
+
+.colorbar-tick-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.colorbar-cat-labels {
+  position: relative;
+  width: 100%;
+  height: 11px;
+  font-size: 0.58rem;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+}
+
+.colorbar-cat-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .legend-title {
@@ -720,6 +840,21 @@ html, body {
   height: 8px;
   border-radius: 1px;
   flex-shrink: 0;
+}
+
+/* Station Markers in GIS Viewport */
+.met-station-icon-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.gis-station-marker {
+  transition: transform 0.15s ease;
+}
+
+.gis-station-marker:hover span:first-child {
+  transform: scale(1.35);
+  box-shadow: 0 0 6px #38bdf8;
 }
 
 /* Header Map Utilities (Mini-Toggle Controls: [ ◉ ] [ ⊞ ]) */
@@ -772,16 +907,40 @@ html, body {
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
 }
 
+/* Position Leaflet controls and attribution clearly above bottom timeline bar */
+.leaflet-bottom.leaflet-right,
+.leaflet-bottom.leaflet-left {
+  bottom: 54px !important;
+  z-index: 999 !important;
+}
+
+.leaflet-bottom.leaflet-right {
+  right: 12px !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: rgba(15, 23, 42, 0.9) !important;
+  border-radius: var(--radius-xs) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background: rgba(15, 23, 42, 0.92) !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  transition: all 0.15s ease;
+}
+
+.leaflet-control-zoom a:hover {
+  background: rgba(30, 41, 59, 0.98) !important;
+  color: #38bdf8 !important;
+}
+
 /* Map Geographic Provenance Bar */
 .map-provenance-bar {
-  position: absolute;
-  bottom: 50px;
-  right: 12px;
-  z-index: 998;
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  color: rgba(255, 255, 255, 0.45);
-  pointer-events: none;
+  display: none !important; /* Provenance integrated into live dock bar and header status */
 }
 
 /* Integrated Timeline Scrubber Bar (Docked at Bottom of Map) */
@@ -2394,8 +2553,8 @@ html, body {
 /* 3D Mode & Variable Switcher Controls (Floating Over 3D Canvas) */
 .three-mode-controls {
   position: absolute;
-  top: 14px;
-  left: 12px;
+  top: 12px;
+  left: 104px;
   z-index: 1001;
   display: flex;
   align-items: center;
@@ -2438,7 +2597,7 @@ html, body {
 /* Forecast Magnitude & Display Scaling Notice (Section 4 & 8) */
 .three-scaling-notice {
   position: absolute;
-  top: 66px;
+  top: 56px;
   left: 12px;
   z-index: 1000;
   display: flex;

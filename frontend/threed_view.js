@@ -1,5 +1,5 @@
 /**
- * SIH26081 — 3D Meteorological Precipitation & Model Disagreement Engine
+ * AETHERA — 3D Meteorological Precipitation & Model Disagreement Engine (SIH26081)
  * WebGL / Three.js Workstation-Grade Analytical Surface Visualization
  * Zero ML, 100% Real Data, Native 0.25° Grid Preserved.
  *

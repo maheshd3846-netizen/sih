@@ -1,5 +1,5 @@
 /**
-  SIH26081 Precipitation Fusion — Professional Meteorological Workstation
+  AETHERA — Adaptive Multi-Model Weather Intelligence Workstation (SIH26081)
   Multi-Model NWP Consensus (NOAA GFS + ECMWF IFS) & Empirical Disagreement Engine
   Zero ML, 100% Real Data, Scientifically Frozen Baselines.
 */
@@ -24,6 +24,8 @@ const state = {
   showGridLines: false,
   map: null,
   baseTileLayer: null,
+  labelsTileLayer: null,
+  stationLayerGroup: null,
   rasterOverlay: null,
   boundaryLayerGroup: null,
   gridLinesLayerGroup: null,
@@ -36,17 +38,39 @@ const state = {
 };
 window.state = state;
 
-// Basemap Tiles (Zero Watermark / Clean Restrained GIS Basemaps)
+// Basemap Tiles (Esri World Gray Base + Reference — High-legibility, Zero-watermark GIS Cartography)
 const TILES = {
   light: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ"
+    base: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    labels: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+    subdomains: ["a", "b", "c"]
   },
   dark: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ"
+    base: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    labels: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+    subdomains: ["a", "b", "c"]
   }
 };
+
+// Meteorological Reference Stations & Regional Urban Centres (AP & Telangana)
+const METEOROLOGICAL_STATIONS = [
+  { name: "Hyderabad", lat: 17.3850, lon: 78.4867, role: "IMD Meteorological Centre (MC)", subregion: "Telangana" },
+  { name: "Visakhapatnam", lat: 17.6868, lon: 83.2185, role: "Cyclone Warning Centre (CWC)", subregion: "Coastal Andhra Pradesh" },
+  { name: "Vijayawada", lat: 16.5062, lon: 80.6480, role: "Radar & Meteorological Station", subregion: "Coastal Andhra Pradesh" },
+  { name: "Amaravati", lat: 16.5131, lon: 80.5165, role: "State Capital Agro-Met Observatory", subregion: "Coastal Andhra Pradesh" },
+  { name: "Tirupati", lat: 13.6288, lon: 79.4192, role: "IMD Synoptic Observatory", subregion: "Rayalaseema" },
+  { name: "Kurnool", lat: 15.8281, lon: 78.0373, role: "Rayalaseema Meteorological Station", subregion: "Rayalaseema" },
+  { name: "Warangal", lat: 17.9689, lon: 79.5941, role: "North Telangana Agro-Met Station", subregion: "Telangana" },
+  { name: "Rajahmundry", lat: 17.0005, lon: 81.8040, role: "Godavari Basin Hydromet Station", subregion: "Coastal Andhra Pradesh" },
+  { name: "Nellore", lat: 14.4426, lon: 79.9865, role: "Coastal Cyclone Station", subregion: "Coastal Andhra Pradesh" },
+  { name: "Nizamabad", lat: 18.6725, lon: 78.0941, role: "North Telangana Observatory", subregion: "Telangana" },
+  { name: "Kadapa", lat: 14.4673, lon: 78.8241, role: "Central Rayalaseema Station", subregion: "Rayalaseema" },
+  { name: "Anantapur", lat: 14.6819, lon: 77.6006, role: "Semi-Arid Zone Met Station", subregion: "Rayalaseema" },
+  { name: "Kakinada", lat: 16.9891, lon: 82.2475, role: "Deep-Water Port Weather Radar", subregion: "Coastal Andhra Pradesh" },
+  { name: "Khammam", lat: 17.2473, lon: 80.1514, role: "Telangana Valley Met Station", subregion: "Telangana" },
+];
 
 // Distinct Meteorological Palettes (Multi-Variable, Weights, Extremes)
 const PALETTES = {
@@ -232,6 +256,13 @@ function switchDimension(dim) {
     }
   }
 
+  const popoverWrapper = document.querySelector(".layers-popover-wrapper");
+  const miniGroup = document.querySelector(".map-util-mini-group");
+  const contextBadge = document.getElementById("map-context-badge");
+  if (popoverWrapper) popoverWrapper.classList.toggle("hidden", dim === "3d");
+  if (miniGroup) miniGroup.classList.toggle("hidden", dim === "3d");
+  if (contextBadge) contextBadge.classList.toggle("hidden", dim === "3d");
+
   updateLegend();
   updateMapContextBadge();
 }
@@ -353,7 +384,7 @@ function updateMapContextBadge() {
 }
 
 /* ========================================================
-   MAP INITIALIZATION
+   MAP INITIALIZATION & CARTOGRAPHIC GIS ENVIRONMENT
    ======================================================== */
 function initMap() {
   state.map = L.map("map", {
@@ -364,19 +395,31 @@ function initMap() {
     zoomControl: false, // Custom position
   });
 
-  // Zoom control top-left below floating toolbar
+  // Zoom control bottom-right
   L.control.zoom({ position: "bottomright" }).addTo(state.map);
 
-  // Default to Esri World Light Gray Base (clean, restrained, zero watermark)
-  state.baseTileLayer = L.tileLayer(TILES.light.url, {
-    attribution: TILES.light.attribution,
-    maxZoom: 16,
-  }).addTo(state.map);
+  // Dedicated Leaflet pane for geographic labels above the weather overlay
+  state.map.createPane("labelsPane");
+  state.map.getPane("labelsPane").style.zIndex = 450;
+  state.map.getPane("labelsPane").style.pointerEvents = "none";
 
-  // Layer groups for boundaries, raster, gridlines, interactive hits
+  // Base tile layer (underneath weather overlay)
+  const baseOpts = { attribution: TILES.light.attribution, maxZoom: 16 };
+  if (TILES.light.subdomains) baseOpts.subdomains = TILES.light.subdomains;
+  state.baseTileLayer = L.tileLayer(TILES.light.base, baseOpts).addTo(state.map);
+
+  // Labels & boundaries tile layer (on top of weather overlay)
+  const labelOpts = { pane: "labelsPane", maxZoom: 16 };
+  if (TILES.light.subdomains) labelOpts.subdomains = TILES.light.subdomains;
+  state.labelsTileLayer = L.tileLayer(TILES.light.labels, labelOpts).addTo(state.map);
+
+  // Layer groups for boundaries, station markers, gridlines, interactive hits
   state.boundaryLayerGroup = L.layerGroup().addTo(state.map);
+  state.stationLayerGroup = L.layerGroup().addTo(state.map);
   state.gridLinesLayerGroup = L.layerGroup().addTo(state.map);
   state.interactiveLayerGroup = L.layerGroup().addTo(state.map);
+
+  renderStationMarkers();
 
   // Click on map snaps directly to underlying 0.25° grid point
   state.map.on("click", (e) => {
@@ -400,16 +443,80 @@ function initMap() {
   });
 }
 
+function renderStationMarkers() {
+  if (!state.stationLayerGroup) return;
+  state.stationLayerGroup.clearLayers();
+
+  METEOROLOGICAL_STATIONS.forEach((st) => {
+    const isDark = state.isDarkMode;
+    const ringColor = isDark ? "#38bdf8" : "#0284c7";
+    const fillColor = isDark ? "rgba(56, 189, 248, 0.28)" : "rgba(2, 132, 199, 0.22)";
+
+    const iconHtml = `
+      <div class="gis-station-marker" style="width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto;">
+        <div style="width: 10px; height: 10px; border-radius: 50%; background: ${fillColor}; border: 1.5px solid ${ringColor}; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 4px rgba(0,0,0,0.35);">
+          <div style="width: 3px; height: 3px; border-radius: 50%; background: #ffffff;"></div>
+        </div>
+      </div>
+    `;
+
+    const customIcon = L.divIcon({
+      html: iconHtml,
+      className: "met-station-icon-wrapper",
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+
+    const marker = L.marker([st.lat, st.lon], {
+      icon: customIcon,
+      pane: "labelsPane",
+      interactive: true,
+    });
+
+    marker.bindTooltip(`
+      <div style="font-family: var(--font-sans); font-size: 11px; padding: 3px 5px; line-height: 1.4;">
+        <div style="font-weight: 700; color: #0284c7; font-size: 11.5px;">${st.name}</div>
+        <div style="font-size: 10px; color: #475569; font-weight: 600;">${st.subregion}</div>
+        <div style="font-size: 9.5px; color: #64748b; margin-top: 1px;">${st.role}</div>
+        <div style="margin-top: 4px; padding-top: 3px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #0284c7; font-weight: 600;">Click to inspect 0.25° forecast cell</div>
+      </div>
+    `, { sticky: true, opacity: 0.95 });
+
+    marker.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      if (state.currentGridData && state.currentGridData.points) {
+        const snappedLat = Math.round(st.lat * 4) / 4;
+        const snappedLon = Math.round(st.lon * 4) / 4;
+        const matched = state.currentGridData.points.find(
+          (p) => Math.abs(p.lat - snappedLat) < 0.13 && Math.abs(p.lon - snappedLon) < 0.13
+        );
+        if (matched) inspectCell(matched);
+      }
+    });
+
+    state.stationLayerGroup.addLayer(marker);
+  });
+}
+
 function toggleBasemap() {
   state.isDarkMode = !state.isDarkMode;
   const btn = document.getElementById("btn-basemap-toggle");
   if (btn) btn.classList.toggle("active", state.isDarkMode);
   const config = state.isDarkMode ? TILES.dark : TILES.light;
-  state.map.removeLayer(state.baseTileLayer);
-  state.baseTileLayer = L.tileLayer(config.url, {
-    attribution: config.attribution,
-    maxZoom: 16,
-  }).addTo(state.map);
+
+  if (state.baseTileLayer) state.map.removeLayer(state.baseTileLayer);
+  if (state.labelsTileLayer) state.map.removeLayer(state.labelsTileLayer);
+
+  const baseOpts = { attribution: config.attribution, maxZoom: 16 };
+  if (config.subdomains) baseOpts.subdomains = config.subdomains;
+  state.baseTileLayer = L.tileLayer(config.base, baseOpts).addTo(state.map);
+
+  const labelOpts = { pane: "labelsPane", maxZoom: 16 };
+  if (config.subdomains) labelOpts.subdomains = config.subdomains;
+  state.labelsTileLayer = L.tileLayer(config.labels, labelOpts).addTo(state.map);
+
+  renderStationMarkers();
+  renderGridLines();
 }
 
 function toggleGridLines() {
@@ -426,12 +533,14 @@ async function loadBoundaryGeoJSON() {
     const geojson = await res.json();
     state.boundaryLayerGroup.clearLayers();
     L.geoJSON(geojson, {
+      pane: "labelsPane",
+      filter: (f) => f.properties && f.properties.name !== "All Domain",
       style: {
-        color: "#475569",
-        weight: 1.2,
-        opacity: 0.65,
+        color: state.isDarkMode ? "rgba(148, 163, 184, 0.45)" : "rgba(71, 85, 105, 0.4)",
+        weight: 1.0,
+        opacity: 0.55,
         fill: false,
-        dashArray: "3, 3",
+        dashArray: "3, 4",
       }
     }).addTo(state.boundaryLayerGroup);
   } catch (e) {
@@ -782,8 +891,10 @@ function setupEventListeners() {
   });
 
   // Quick Demo Shortcuts
-  document.getElementById("btn-inspect-highest-d").addEventListener("click", inspectHighestDisagreementCell);
-  document.getElementById("btn-inspect-peak-rain").addEventListener("click", inspectPeakRainfallCell);
+  const btnInspectD = document.getElementById("btn-inspect-highest-d");
+  if (btnInspectD) btnInspectD.addEventListener("click", inspectHighestDisagreementCell);
+  const btnInspectRain = document.getElementById("btn-inspect-peak-rain");
+  if (btnInspectRain) btnInspectRain.addEventListener("click", inspectPeakRainfallCell);
 
   // Judge Demo Tour Triggers
   const btnStartDemo = document.getElementById("btn-start-demo");
@@ -1089,6 +1200,16 @@ async function setOperationalMode(mode) {
     const mwCtxPeriod = document.getElementById("mw-ctx-period");
     if (mwCtxPeriod) mwCtxPeriod.textContent = "50/50 Operational Reference";
 
+    const footerPill = document.getElementById("footer-mode-pill");
+    const footerK = document.getElementById("footer-mode-k");
+    const footerV = document.getElementById("footer-mode-v");
+    if (footerPill) {
+      footerPill.className = "status-pill status-pill-live";
+      footerPill.title = "Current live operational NWP run";
+    }
+    if (footerK) footerK.textContent = "Mode:";
+    if (footerV) footerV.textContent = "Live Operational NWP Feed (Current 00Z NOAA GFS + ECMWF IFS)";
+
     await loadLiveForecast();
   } else {
     if (btnLive) btnLive.classList.remove("active");
@@ -1115,6 +1236,16 @@ async function setOperationalMode(mode) {
     if (regLabel) regLabel.textContent = "AP & Telangana Domain";
     const mwCtxPeriod = document.getElementById("mw-ctx-period");
     if (mwCtxPeriod) mwCtxPeriod.textContent = "Jun–Aug 2024 Historical Analysis";
+
+    const footerPill = document.getElementById("footer-mode-pill");
+    const footerK = document.getElementById("footer-mode-k");
+    const footerV = document.getElementById("footer-mode-v");
+    if (footerPill) {
+      footerPill.className = "status-pill status-pill-retro";
+      footerPill.title = "Retrospective 2024 monsoon historical verification mode";
+    }
+    if (footerK) footerK.textContent = "Notice:";
+    if (footerV) footerV.textContent = "Retrospective Demonstration (Jun–Aug 2024) • Verified Historical Analysis";
 
     updateDateDisplay();
     await loadForecastForDate(state.currentDate);
@@ -1159,16 +1290,30 @@ function updateDomainStats(data) {
   const peakLoc = peakPt ? `(${peakPt.lat.toFixed(2)}°N, ${peakPt.lon.toFixed(2)}°E)` : "";
 
   // Update Summary DOM
-  const d = new Date(data.forecast_date + "T00:00:00Z");
-  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-  const dateFormatted = `${String(d.getUTCDate()).padStart(2, "0")} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-  
+  let dateFormatted = "";
+  const rawDateStr = data.forecast_date || data.valid_time_utc || data.initialization_time_utc || state.currentDate;
+  if (rawDateStr) {
+    const d = new Date(rawDateStr.includes("T") ? rawDateStr : rawDateStr + "T00:00:00Z");
+    if (!isNaN(d.getTime())) {
+      const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+      dateFormatted = `${String(d.getUTCDate()).padStart(2, "0")} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    }
+  }
+
   const dateBadge = document.getElementById("summary-date-badge");
-  if (dateBadge) dateBadge.textContent = dateFormatted;
+  if (dateBadge && dateFormatted) dateBadge.textContent = dateFormatted;
   const regionLabel = document.getElementById("summary-region-label");
-  if (regionLabel) regionLabel.textContent = state.activeRegion === "All"
-    ? `AP & Telangana Domain (${total} Cells)`
-    : `${state.activeRegion} (${total} Cells)`;
+  if (regionLabel) {
+    if (state.operationalMode === "live") {
+      regionLabel.textContent = "Current 24-Hour NWP Forecast";
+    } else {
+      regionLabel.textContent = state.activeRegion === "All" ? "AP & Telangana Domain" : state.activeRegion;
+    }
+  }
+  const summaryKicker = document.querySelector("#panel-domain-summary .panel-kicker");
+  if (summaryKicker) {
+    summaryKicker.textContent = `OPERATIONAL OVERVIEW • ${total} CELLS`;
+  }
 
   const elMean = document.getElementById("val-domain-mean");
   if (elMean) elMean.textContent = meanFused;
@@ -1453,140 +1598,205 @@ async function updateExtremesModeView() {
 }
 
 /* ========================================================
-   METEOROLOGICAL COLOR CALIBRATION
+   METEOROLOGICAL COLOR CALIBRATION & SCALAR EXTRACTION
    ======================================================== */
+function getScalarValue(pt, layer, variable) {
+  if (layer === "disagreement") {
+    return pt.disagreement !== undefined ? pt.disagreement : pt.disagreement_mm;
+  }
+  if (layer === "w_gfs") {
+    return pt.w_gfs !== undefined ? pt.w_gfs : 0.50;
+  }
+  if (layer === "w_ecmwf") {
+    return pt.w_ecmwf !== undefined ? pt.w_ecmwf : 0.50;
+  }
+  if (layer === "dominant_model") {
+    const dom = pt.dominant_model || "Consensus";
+    if (dom.includes("GFS")) return -1.0;
+    if (dom.includes("ECMWF")) return 1.0;
+    return 0.0;
+  }
+  if (layer === "weight_entropy") {
+    return pt.weight_entropy !== undefined ? pt.weight_entropy : 0.693;
+  }
+  if (layer === "extreme_guidance") {
+    if (pt.extreme_guidance && pt.extreme_guidance.is_exceeded) {
+      return pt.extreme_guidance.severity_score || 1;
+    }
+    return 0;
+  }
+  if (layer === "confidence") {
+    const dVal = pt.disagreement !== undefined ? pt.disagreement : pt.disagreement_mm;
+    return dVal;
+  }
+
+  // Continuous forecast layers
+  let val = pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm;
+  if (layer === "fused") val = pt.baseline_val !== undefined ? pt.baseline_val : pt.fused_mm;
+  else if (layer === "gfs") val = pt.gfs_val !== undefined ? pt.gfs_val : pt.gfs_mm;
+  else if (layer === "ecmwf") val = pt.ecmwf_val !== undefined ? pt.ecmwf_val : pt.ecmwf_mm;
+  else if (layer === "imd") {
+    val = pt.obs_val !== undefined ? pt.obs_val : (pt.imd_mm !== null ? pt.imd_mm : 0.0);
+  }
+  return val;
+}
+
+// Continuous Color Ramp Interpolation with Controlled Opacity
+function getContinuousColor(val, layer, variable) {
+  if (val === undefined || isNaN(val)) return [0, 0, 0, 0];
+
+  // 1. Inter-Model Disagreement
+  if (layer === "disagreement") {
+    const stops = [
+      { val: 0.0,  r: 165, g: 180, b: 252, a: 0.18 },
+      { val: 0.11, r: 59,  g: 130, b: 246, a: 0.55 },
+      { val: 2.06, r: 245, g: 158, b: 11,  a: 0.75 },
+      { val: 5.0,  r: 234, g: 88,  b: 12,  a: 0.82 },
+      { val: 10.0, r: 220, g: 38,  b: 38,  a: 0.88 },
+      { val: 25.0, r: 126, g: 34,  b: 206, a: 0.92 },
+    ];
+    return interpolatePiecewise(val, stops);
+  }
+
+  // 2. Simplex Model Weights
+  if (layer === "w_gfs" || layer === "w_ecmwf") {
+    const stops = [
+      { val: 0.00, r: 12,  g: 74,  b: 110, a: 0.85 },
+      { val: 0.42, r: 2,   g: 132, b: 199, a: 0.75 },
+      { val: 0.50, r: 100, g: 116, b: 139, a: 0.65 },
+      { val: 0.58, r: 245, g: 158, b: 11,  a: 0.75 },
+      { val: 0.70, r: 234, g: 88,  b: 12,  a: 0.82 },
+      { val: 1.00, r: 194, g: 65,  b: 12,  a: 0.88 },
+    ];
+    return interpolatePiecewise(val, stops);
+  }
+
+  // 3. Dominant Model
+  if (layer === "dominant_model") {
+    if (val < -0.2) return [2, 132, 199, 0.82]; // GFS blue
+    if (val > 0.2) return [217, 119, 6, 0.82];  // ECMWF amber
+    return [13, 148, 136, 0.78];                // Balanced teal
+  }
+
+  // 4. Weight Entropy
+  if (layer === "weight_entropy") {
+    const stops = [
+      { val: 0.60, r: 14,  g: 165, b: 233, a: 0.80 },
+      { val: 0.67, r: 245, g: 158, b: 11,  a: 0.80 },
+      { val: 0.693, r: 126, g: 34,  b: 206, a: 0.85 },
+    ];
+    return interpolatePiecewise(val, stops);
+  }
+
+  // 5. Extreme Guidance
+  if (layer === "extreme_guidance") {
+    if (val >= 3) return [126, 34, 206, 0.92];
+    if (val >= 2) return [220, 38, 38, 0.86];
+    if (val >= 1) return [234, 88, 12, 0.80];
+    return [16, 185, 129, 0.20];
+  }
+
+  // 6. Empirical Confidence
+  if (layer === "confidence") {
+    const stops = [
+      { val: 0.0,  r: 16,  g: 185, b: 129, a: 0.72 },
+      { val: 0.10, r: 16,  g: 185, b: 129, a: 0.72 },
+      { val: 0.12, r: 245, g: 158, b: 11,  a: 0.74 },
+      { val: 2.05, r: 245, g: 158, b: 11,  a: 0.74 },
+      { val: 2.07, r: 220, g: 38,  b: 38,  a: 0.82 },
+      { val: 10.0, r: 220, g: 38,  b: 38,  a: 0.82 },
+    ];
+    return interpolatePiecewise(val, stops);
+  }
+
+  // 7. Temperature Variable
+  if (variable === "temperature") {
+    const stops = [
+      { val: 10.0, r: 59,  g: 130, b: 246, a: 0.65 },
+      { val: 16.0, r: 59,  g: 130, b: 246, a: 0.68 },
+      { val: 24.0, r: 6,   g: 182, b: 212, a: 0.72 },
+      { val: 32.0, r: 16,  g: 185, b: 129, a: 0.75 },
+      { val: 38.0, r: 245, g: 158, b: 11,  a: 0.80 },
+      { val: 42.0, r: 234, g: 88,  b: 12,  a: 0.84 },
+      { val: 45.0, r: 220, g: 38,  b: 38,  a: 0.88 },
+      { val: 50.0, r: 126, g: 34,  b: 206, a: 0.92 },
+    ];
+    return interpolatePiecewise(val, stops);
+  }
+
+  // 8. Wind Variable
+  if (variable === "wind") {
+    const stops = [
+      { val: 0.0,  r: 56,  g: 189, b: 248, a: 0.15 },
+      { val: 15.0, r: 16,  g: 185, b: 129, a: 0.60 },
+      { val: 30.0, r: 245, g: 158, b: 11,  a: 0.72 },
+      { val: 45.0, r: 234, g: 88,  b: 12,  a: 0.80 },
+      { val: 62.0, r: 220, g: 38,  b: 38,  a: 0.86 },
+      { val: 88.0, r: 126, g: 34,  b: 206, a: 0.92 },
+    ];
+    return interpolatePiecewise(val, stops);
+  }
+
+  // 9. Standard Precipitation Field (Smooth continuous meteorological field)
+  // Preserves exact scientifically defined thresholds
+  const rainStops = [
+    { val: 0.0,  r: 241, g: 245, b: 249, a: 0.00 }, // Dry: transparent
+    { val: 0.1,  r: 125, g: 211, b: 252, a: 0.42 }, // Trace (< 2.5 mm)
+    { val: 2.5,  r: 37,  g: 99,  b: 235, a: 0.64 }, // Light (2.5 - 7.5 mm)
+    { val: 7.5,  r: 22,  g: 163, b: 74,  a: 0.74 }, // Moderate (7.5 - 15 mm)
+    { val: 15.0, r: 234, g: 88,  b: 12,  a: 0.82 }, // Heavy (15 - 35 mm)
+    { val: 35.0, r: 220, g: 38,  b: 38,  a: 0.88 }, // Very Heavy (35 - 65 mm)
+    { val: 65.0, r: 126, g: 34,  b: 206, a: 0.92 }, // Extreme (>= 65 mm)
+  ];
+  return interpolatePiecewise(val, rainStops);
+}
+
+function interpolatePiecewise(val, stops) {
+  if (val <= stops[0].val) {
+    const s = stops[0];
+    return [s.r, s.g, s.b, s.a];
+  }
+  const last = stops[stops.length - 1];
+  if (val >= last.val) {
+    return [last.r, last.g, last.b, last.a];
+  }
+
+  for (let i = 0; i < stops.length - 1; i++) {
+    const s0 = stops[i];
+    const s1 = stops[i + 1];
+    if (val >= s0.val && val <= s1.val) {
+      const t = (val - s0.val) / (s1.val - s0.val);
+      const r = Math.round(s0.r + t * (s1.r - s0.r));
+      const g = Math.round(s0.g + t * (s1.g - s0.g));
+      const b = Math.round(s0.b + t * (s1.b - s0.b));
+      const a = s0.a + t * (s1.a - s0.a);
+      return [r, g, b, a];
+    }
+  }
+  return [last.r, last.g, last.b, last.a];
+}
+
+// Retained for 3D Viewer & backward compatibility
 function getPointColorAndOpacity(point) {
   const layer = state.activeLayer;
-
-  // 1. Empirical Confidence
   if (layer === "confidence") {
     const confItem = PALETTES.confidence.find((c) => c.key === point.confidence_class);
     return { color: confItem ? confItem.color : "#94a3b8", opacity: 0.85 };
   }
-
-  // 2. Inter-Model Disagreement
-  if (layer === "disagreement") {
-    const val = point.disagreement !== undefined ? point.disagreement : point.disagreement_mm;
-    for (const item of PALETTES.disagreement) {
-      if (val >= item.min) {
-        return { color: item.color, opacity: val < 0.11 ? 0.2 : 0.85 };
-      }
-    }
-    return { color: "#a5b4fc", opacity: 0.3 };
-  }
-
-  // 3. Model Weight Maps
-  if (layer === "w_gfs") {
-    const val = point.w_gfs !== undefined ? point.w_gfs : 0.50;
-    for (const item of PALETTES.weights) {
-      if (val >= item.min) {
-        return { color: item.color, opacity: 0.88, val: val };
-      }
-    }
-    return { color: "#0c4a6e", opacity: 0.85, val: val };
-  }
-
-  if (layer === "w_ecmwf") {
-    const val = point.w_ecmwf !== undefined ? point.w_ecmwf : 0.50;
-    for (const item of PALETTES.weights) {
-      if (val >= item.min) {
-        return { color: item.color, opacity: 0.88, val: val };
-      }
-    }
-    return { color: "#0c4a6e", opacity: 0.85, val: val };
-  }
-
-  // 4. Dominant Model Distribution
-  if (layer === "dominant_model") {
-    const dom = point.dominant_model || "Consensus";
-    if (dom.includes("GFS")) {
-      return { color: "#0284c7", opacity: 0.88 }; // GFS blue
-    } else if (dom.includes("ECMWF")) {
-      return { color: "#d97706", opacity: 0.88 }; // ECMWF amber
-    } else {
-      return { color: "#0d9488", opacity: 0.85 }; // Balanced teal
-    }
-  }
-
-  // 5. Shannon Weight Entropy
-  if (layer === "weight_entropy") {
-    const val = point.weight_entropy !== undefined ? point.weight_entropy : 0.693;
-    for (const item of PALETTES.entropy) {
-      if (val >= item.min) {
-        return { color: item.color, opacity: 0.85, val: val };
-      }
-    }
-    return { color: "#7e22ce", opacity: 0.85, val: val };
-  }
-
-  // 6. Extreme Guidance Alerts
-  if (layer === "extreme_guidance") {
-    const ext = point.extreme_guidance;
-    if (ext && ext.is_exceeded) {
-      const score = ext.severity_score || 1;
-      if (score >= 3) return { color: "#7e22ce", opacity: 0.95 };
-      if (score === 2) return { color: "#dc2626", opacity: 0.90 };
-      if (score === 1) return { color: "#ea580c", opacity: 0.88 };
-      return { color: "#f59e0b", opacity: 0.85 };
-    }
-    return { color: "rgba(16, 185, 129, 0.2)", opacity: 0.25 };
-  }
-
-  // 7. Forecast Layers (blended, fused, gfs, ecmwf, imd)
-  let val = point.blend_val !== undefined ? point.blend_val : point.fused_mm;
-  if (layer === "fused") val = point.baseline_val !== undefined ? point.baseline_val : point.fused_mm;
-  else if (layer === "gfs") val = point.gfs_val !== undefined ? point.gfs_val : point.gfs_mm;
-  else if (layer === "ecmwf") val = point.ecmwf_val !== undefined ? point.ecmwf_val : point.ecmwf_mm;
-  else if (layer === "imd") {
-    val = point.obs_val !== undefined ? point.obs_val : (point.imd_mm !== null ? point.imd_mm : 0.0);
-  }
-
-  // Temperature Variable Palette
-  if (state.activeVariable === "temperature") {
-    for (const item of PALETTES.temperature) {
-      if (val >= item.min) {
-        return { color: item.color, opacity: 0.85, val: val };
-      }
-    }
-    return { color: "#3b82f6", opacity: 0.85, val: val };
-  }
-
-  // Wind Variable Palette
-  if (state.activeVariable === "wind") {
-    for (const item of PALETTES.wind) {
-      if (val >= item.min) {
-        return { color: item.color, opacity: val < 10.0 ? 0.25 : 0.85, val: val };
-      }
-    }
-    return { color: "#10b981", opacity: 0.3, val: val };
-  }
-
-  // Rainfall Variable Palette
-  for (const item of PALETTES.rain) {
-    if (val >= item.min) {
-      return {
-        color: item.color,
-        opacity: val < 0.1 ? 0.0 : 0.88, // Dry areas transparent
-        val: val
-      };
-    }
-  }
-  return { color: "#7dd3fc", opacity: 0.0, val: val };
+  const val = getScalarValue(point, layer, state.activeVariable);
+  const rgba = getContinuousColor(val, layer, state.activeVariable);
+  return {
+    color: `rgb(${rgba[0]}, ${rgba[1]}, ${rgba[2]})`,
+    opacity: rgba[3],
+    val: val
+  };
 }
 
 /* ========================================================
-   MAP PRESENTATION RENDERING (Smooth Raster & Interactive Hits)
+   MAP PRESENTATION RENDERING (Continuous Interpolated Field & Interactive Hits)
    ======================================================== */
 function renderGrid() {
   if (!state.currentGridData || !state.currentGridData.points) return;
-  
-  // 1. Create dynamic offscreen canvas for smooth raster precipitation visualization
-  const canvas = document.createElement("canvas");
-  const cWidth = 740;
-  const cHeight = 660;
-  canvas.width = cWidth;
-  canvas.height = cHeight;
-  const ctx = canvas.getContext("2d");
 
   const minLat = DOMAIN_BOUNDS.latMin;
   const maxLat = DOMAIN_BOUNDS.latMax;
@@ -1596,48 +1806,130 @@ function renderGrid() {
   const latSpan = maxLat - minLat;
   const lonSpan = maxLon - minLon;
 
-  const cellW = (0.25 / lonSpan) * cWidth;
-  const cellH = (0.25 / latSpan) * cHeight;
+  // Build 33x37 regular grid matrix for O(1) continuous spatial sampling
+  const gridRows = 33;
+  const gridCols = 37;
+  const scalarGrid = new Array(gridRows);
+  for (let r = 0; r < gridRows; r++) {
+    scalarGrid[r] = new Float32Array(gridCols).fill(NaN);
+  }
 
-  // Draw discrete cell colored blocks onto primary canvas
+  const layer = state.activeLayer;
+  const variable = state.activeVariable;
+
   state.currentGridData.points.forEach((pt) => {
     if (state.activeRegion !== "All" && pt.subregion !== state.activeRegion) {
       return;
     }
-
-    const x = ((pt.lon - 0.125 - minLon) / lonSpan) * cWidth;
-    const y = ((maxLat - (pt.lat + 0.125)) / latSpan) * cHeight;
-
-    const style = getPointColorAndOpacity(pt);
-    if (style.opacity > 0) {
-      ctx.fillStyle = style.color;
-      ctx.globalAlpha = style.opacity;
-      // Draw seamless cell block
-      ctx.fillRect(Math.floor(x), Math.floor(y), Math.ceil(cellW) + 1, Math.ceil(cellH) + 1);
+    const r = Math.round((pt.lat - 12.0) * 4);
+    const c = Math.round((pt.lon - 76.0) * 4);
+    if (r >= 0 && r < gridRows && c >= 0 && c < gridCols) {
+      scalarGrid[r][c] = getScalarValue(pt, layer, variable);
     }
   });
 
-  // Apply subtle presentation-layer meteorological smoothing if rainfall or disagreement
-  const smoothCanvas = document.createElement("canvas");
-  smoothCanvas.width = cWidth;
-  smoothCanvas.height = cHeight;
-  const smoothCtx = smoothCanvas.getContext("2d");
+  // Offscreen canvas for continuous raster interpolation
+  const canvas = document.createElement("canvas");
+  const cWidth = 740;
+  const cHeight = 660;
+  canvas.width = cWidth;
+  canvas.height = cHeight;
+  const ctx = canvas.getContext("2d");
 
-  if (state.activeLayer === "confidence") {
-    // For categorical confidence, preserve sharp zone boundaries
-    smoothCtx.drawImage(canvas, 0, 0);
-  } else {
-    // For scalar continuous precipitation & disagreement fields, apply gentle smoothing
-    smoothCtx.filter = "blur(4px)";
-    smoothCtx.drawImage(canvas, 0, 0);
-    // Draw crisp center over blurred edges for perfect balance of sharpness & continuity
-    smoothCtx.filter = "none";
-    smoothCtx.globalAlpha = 0.55;
-    smoothCtx.drawImage(canvas, 0, 0);
+  const imgData = ctx.createImageData(cWidth, cHeight);
+  const buf32 = new Uint32Array(imgData.data.buffer);
+
+  for (let py = 0; py < cHeight; py++) {
+    const lat = maxLat - (py / cHeight) * latSpan;
+    const rowF = (lat - 12.0) * 4;
+    const r0 = Math.floor(rowF);
+    const r1 = r0 + 1;
+    const dr = rowF - r0;
+
+    for (let px = 0; px < cWidth; px++) {
+      const lon = minLon + (px / cWidth) * lonSpan;
+      const colF = (lon - 76.0) * 4;
+      const c0 = Math.floor(colF);
+      const c1 = c0 + 1;
+      const dc = colF - c0;
+
+      // Check 4 neighbor nodes
+      const v00 = (r0 >= 0 && r0 < gridRows && c0 >= 0 && c0 < gridCols) ? scalarGrid[r0][c0] : NaN;
+      const v01 = (r0 >= 0 && r0 < gridRows && c1 >= 0 && c1 < gridCols) ? scalarGrid[r0][c1] : NaN;
+      const v10 = (r1 >= 0 && r1 < gridRows && c0 >= 0 && c0 < gridCols) ? scalarGrid[r1][c0] : NaN;
+      const v11 = (r1 >= 0 && r1 < gridRows && c1 >= 0 && c1 < gridCols) ? scalarGrid[r1][c1] : NaN;
+
+      const n00Valid = !isNaN(v00);
+      const n01Valid = !isNaN(v01);
+      const n10Valid = !isNaN(v10);
+      const n11Valid = !isNaN(v11);
+
+      const validCount = (n00Valid ? 1 : 0) + (n01Valid ? 1 : 0) + (n10Valid ? 1 : 0) + (n11Valid ? 1 : 0);
+      if (validCount === 0) continue;
+
+      let minDist = 999;
+      if (n00Valid) minDist = Math.min(minDist, Math.hypot(dr, dc));
+      if (n01Valid) minDist = Math.min(minDist, Math.hypot(dr, dc - 1));
+      if (n10Valid) minDist = Math.min(minDist, Math.hypot(dr - 1, dc));
+      if (n11Valid) minDist = Math.min(minDist, Math.hypot(dr - 1, dc - 1));
+
+      // Domain mask: Outside the valid domain, do not show forecast colors
+      if (minDist > 0.88) continue;
+
+      let feather = 1.0;
+      if (minDist > 0.45) {
+        feather = 0.5 * (1.0 + Math.cos(Math.PI * (minDist - 0.45) / (0.88 - 0.45)));
+      }
+
+      let interpolatedVal = 0;
+      if (validCount === 4) {
+        // C1 continuous bicubic / smoothstep hermite interpolation
+        const u = dr * dr * (3 - 2 * dr);
+        const v = dc * dc * (3 - 2 * dc);
+        interpolatedVal = (1 - u) * (1 - v) * v00 +
+                          (1 - u) * v * v01 +
+                          u * (1 - v) * v10 +
+                          u * v * v11;
+      } else {
+        // Boundary weighted interpolation
+        let wSum = 0;
+        let vSum = 0;
+        if (n00Valid) {
+          const w = Math.max(0, 1 - Math.hypot(dr, dc) / 1.414);
+          const wSq = w * w;
+          wSum += wSq; vSum += v00 * wSq;
+        }
+        if (n01Valid) {
+          const w = Math.max(0, 1 - Math.hypot(dr, dc - 1) / 1.414);
+          const wSq = w * w;
+          wSum += wSq; vSum += v01 * wSq;
+        }
+        if (n10Valid) {
+          const w = Math.max(0, 1 - Math.hypot(dr - 1, dc) / 1.414);
+          const wSq = w * w;
+          wSum += wSq; vSum += v10 * wSq;
+        }
+        if (n11Valid) {
+          const w = Math.max(0, 1 - Math.hypot(dr - 1, dc - 1) / 1.414);
+          const wSq = w * w;
+          wSum += wSq; vSum += v11 * wSq;
+        }
+        interpolatedVal = wSum > 0 ? (vSum / wSum) : 0;
+      }
+
+      const rgba = getContinuousColor(interpolatedVal, layer, variable);
+      const alpha = Math.round(rgba[3] * feather * 255);
+      if (alpha > 0) {
+        const idx = py * cWidth + px;
+        buf32[idx] = (alpha << 24) | (rgba[2] << 16) | (rgba[1] << 8) | rgba[0];
+      }
+    }
   }
 
-  // Update or add Leaflet ImageOverlay
-  const imgDataUrl = smoothCanvas.toDataURL();
+  ctx.putImageData(imgData, 0, 0);
+
+  // Update or add Leaflet ImageOverlay at zIndex: 350
+  const imgDataUrl = canvas.toDataURL();
   const bounds = [
     [minLat, minLon],
     [maxLat, maxLon]
@@ -1650,10 +1942,10 @@ function renderGrid() {
   state.rasterOverlay = L.imageOverlay(imgDataUrl, bounds, {
     opacity: 0.90,
     interactive: false,
-    zIndex: 400,
+    zIndex: 350,
   }).addTo(state.map);
 
-  // 2. Clear & rebuild interactive invisible grid hits for hover tooltips & click handlers
+  // 2. Clear & rebuild invisible interactive grid hits for cell inspection & hover tooltips
   state.interactiveLayerGroup.clearLayers();
   const half = 0.125;
 
@@ -1667,7 +1959,6 @@ function renderGrid() {
       [pt.lat + half, pt.lon + half]
     ];
 
-    // Transparent interactive polygon
     const hitRect = L.rectangle(cellBounds, {
       stroke: false,
       fillColor: "#000000",
@@ -1675,7 +1966,6 @@ function renderGrid() {
       interactive: true,
     });
 
-    // Meteorological tooltip
     const unit = state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm";
     let layerValText = `<strong>${pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm} ${unit}</strong> (Context-Aware Blend)`;
     if (state.activeLayer === "fused") layerValText = `<strong>${pt.baseline_val !== undefined ? pt.baseline_val : pt.fused_mm} ${unit}</strong> (50/50 Baseline)`;
@@ -1712,7 +2002,7 @@ function renderGrid() {
     state.interactiveLayerGroup.addLayer(hitRect);
   });
 
-  // Render high zoom grid lines if active
+  // Render high zoom graticule if active
   renderGridLines();
 }
 
@@ -1720,26 +2010,49 @@ function renderGridLines() {
   state.gridLinesLayerGroup.clearLayers();
   if (!state.showGridLines || !state.currentGridData || !state.currentGridData.points) return;
 
-  const half = 0.125;
-  state.currentGridData.points.forEach((pt) => {
-    if (state.activeRegion !== "All" && pt.subregion !== state.activeRegion) return;
-    const b = [
-      [pt.lat - half, pt.lon - half],
-      [pt.lat + half, pt.lon + half]
-    ];
-    const wire = L.rectangle(b, {
-      color: "rgba(148, 163, 184, 0.4)",
-      weight: 0.7,
-      fill: false,
-      dashArray: "2, 3",
-      interactive: false,
+  const graticuleStyle = {
+    color: state.isDarkMode ? "rgba(148, 163, 184, 0.28)" : "rgba(71, 85, 105, 0.25)",
+    weight: 0.5,
+    dashArray: "2, 4",
+    interactive: false,
+    pane: "labelsPane"
+  };
+
+  // Parallels (every 0.25°)
+  for (let lat = 12.0; lat <= 20.01; lat += 0.25) {
+    const isMajor = Math.abs(lat - Math.round(lat)) < 0.01;
+    const line = L.polyline([
+      [lat, 76.0],
+      [lat, 85.0]
+    ], {
+      ...graticuleStyle,
+      weight: isMajor ? 0.75 : 0.45,
+      color: isMajor 
+        ? (state.isDarkMode ? "rgba(148, 163, 184, 0.38)" : "rgba(71, 85, 105, 0.35)") 
+        : graticuleStyle.color
     });
-    state.gridLinesLayerGroup.addLayer(wire);
-  });
+    state.gridLinesLayerGroup.addLayer(line);
+  }
+
+  // Meridians (every 0.25°)
+  for (let lon = 76.0; lon <= 85.01; lon += 0.25) {
+    const isMajor = Math.abs(lon - Math.round(lon)) < 0.01;
+    const line = L.polyline([
+      [12.0, lon],
+      [20.0, lon]
+    ], {
+      ...graticuleStyle,
+      weight: isMajor ? 0.75 : 0.45,
+      color: isMajor 
+        ? (state.isDarkMode ? "rgba(148, 163, 184, 0.38)" : "rgba(71, 85, 105, 0.35)") 
+        : graticuleStyle.color
+    });
+    state.gridLinesLayerGroup.addLayer(line);
+  }
 }
 
 /* ========================================================
-   FLOATING METEOROLOGICAL LEGEND
+   FLOATING METEOROLOGICAL COLOR BAR LEGEND
    ======================================================== */
 function updateLegend() {
   const container = document.getElementById("map-legend");
@@ -1802,32 +2115,256 @@ function updateLegend() {
     }
   }
 
-  // 2D Map Legend
+  // 2D Map Continuous Color Bar Legend
   const layer = state.activeLayer;
-  let title = "CONTEXT-AWARE BLEND";
+
+  // 1. Rainfall Field Color Bar
+  if (state.activeVariable === "precipitation" && ["blended", "fused", "gfs", "ecmwf", "imd"].includes(layer)) {
+    let layerLabel = "Rainfall Intensity";
+    if (layer === "blended") layerLabel = "Context-Aware Blend";
+    else if (layer === "fused") layerLabel = "50/50 Baseline";
+    else if (layer === "gfs") layerLabel = "NOAA GFS Forecast";
+    else if (layer === "ecmwf") layerLabel = "ECMWF IFS Forecast";
+    else if (layer === "imd") layerLabel = "IMD Retrospective Obs";
+
+    container.innerHTML = `
+      <div class="met-colorbar-card">
+        <div class="colorbar-head">
+          <div class="colorbar-title-row">
+            <span class="colorbar-dot"></span>
+            <span class="colorbar-title">Rainfall Intensity</span>
+          </div>
+          <span class="colorbar-unit">mm / 24h</span>
+        </div>
+        <div class="colorbar-ramp-container">
+          <div class="colorbar-ramp-gradient" style="background: linear-gradient(to right, #7dd3fc 0%, #7dd3fc 14%, #2563eb 32%, #16a34a 50%, #ea580c 68%, #dc2626 84%, #7e22ce 100%);"></div>
+          <div class="colorbar-tick-marks">
+            <span class="c-tick" style="left: 0%;"></span>
+            <span class="c-tick" style="left: 14%;"></span>
+            <span class="c-tick" style="left: 32%;"></span>
+            <span class="c-tick" style="left: 50%;"></span>
+            <span class="c-tick" style="left: 68%;"></span>
+            <span class="c-tick" style="left: 84%;"></span>
+            <span class="c-tick" style="left: 100%;"></span>
+          </div>
+        </div>
+        <div class="colorbar-tick-labels">
+          <span style="left: 0%;">0</span>
+          <span style="left: 14%;">0.1</span>
+          <span style="left: 32%;">2.5</span>
+          <span style="left: 50%;">7.5</span>
+          <span style="left: 68%;">15</span>
+          <span style="left: 84%;">35</span>
+          <span style="left: 100%;">65+</span>
+        </div>
+        <div class="colorbar-cat-labels">
+          <span style="left: 7%;">Trace</span>
+          <span style="left: 23%;">Light</span>
+          <span style="left: 41%;">Mod</span>
+          <span style="left: 59%;">Heavy</span>
+          <span style="left: 76%;">V.Heavy</span>
+          <span style="left: 92%;">Extreme</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 2. Temperature Color Bar
+  if (state.activeVariable === "temperature" && ["blended", "fused", "gfs", "ecmwf", "imd"].includes(layer)) {
+    container.innerHTML = `
+      <div class="met-colorbar-card">
+        <div class="colorbar-head">
+          <div class="colorbar-title-row">
+            <span class="colorbar-dot" style="background: #ea580c; box-shadow: 0 0 6px #ea580c;"></span>
+            <span class="colorbar-title">Temperature Field</span>
+          </div>
+          <span class="colorbar-unit">°C</span>
+        </div>
+        <div class="colorbar-ramp-container">
+          <div class="colorbar-ramp-gradient" style="background: linear-gradient(to right, #3b82f6 0%, #06b6d4 25%, #10b981 45%, #f59e0b 65%, #ea580c 80%, #dc2626 92%, #7e22ce 100%);"></div>
+          <div class="colorbar-tick-marks">
+            <span class="c-tick" style="left: 0%;"></span>
+            <span class="c-tick" style="left: 25%;"></span>
+            <span class="c-tick" style="left: 45%;"></span>
+            <span class="c-tick" style="left: 65%;"></span>
+            <span class="c-tick" style="left: 80%;"></span>
+            <span class="c-tick" style="left: 92%;"></span>
+            <span class="c-tick" style="left: 100%;"></span>
+          </div>
+        </div>
+        <div class="colorbar-tick-labels">
+          <span style="left: 0%;">&lt;16</span>
+          <span style="left: 25%;">24</span>
+          <span style="left: 45%;">32</span>
+          <span style="left: 65%;">38</span>
+          <span style="left: 80%;">42</span>
+          <span style="left: 92%;">45</span>
+          <span style="left: 100%;">48+</span>
+        </div>
+        <div class="colorbar-cat-labels">
+          <span style="left: 12%;">Cool</span>
+          <span style="left: 35%;">Mild</span>
+          <span style="left: 55%;">Warm</span>
+          <span style="left: 72%;">Hot</span>
+          <span style="left: 86%;">Heatwave</span>
+          <span style="left: 96%;">Severe</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 3. Wind Speed Color Bar
+  if (state.activeVariable === "wind" && ["blended", "fused", "gfs", "ecmwf", "imd"].includes(layer)) {
+    container.innerHTML = `
+      <div class="met-colorbar-card">
+        <div class="colorbar-head">
+          <div class="colorbar-title-row">
+            <span class="colorbar-dot" style="background: #10b981; box-shadow: 0 0 6px #10b981;"></span>
+            <span class="colorbar-title">Wind Speed Field</span>
+          </div>
+          <span class="colorbar-unit">km/h</span>
+        </div>
+        <div class="colorbar-ramp-container">
+          <div class="colorbar-ramp-gradient" style="background: linear-gradient(to right, #38bdf8 0%, #10b981 30%, #f59e0b 55%, #ea580c 75%, #dc2626 90%, #7e22ce 100%);"></div>
+          <div class="colorbar-tick-marks">
+            <span class="c-tick" style="left: 0%;"></span>
+            <span class="c-tick" style="left: 30%;"></span>
+            <span class="c-tick" style="left: 55%;"></span>
+            <span class="c-tick" style="left: 75%;"></span>
+            <span class="c-tick" style="left: 90%;"></span>
+            <span class="c-tick" style="left: 100%;"></span>
+          </div>
+        </div>
+        <div class="colorbar-tick-labels">
+          <span style="left: 0%;">&lt;15</span>
+          <span style="left: 30%;">30</span>
+          <span style="left: 55%;">45</span>
+          <span style="left: 75%;">62</span>
+          <span style="left: 90%;">88</span>
+          <span style="left: 100%;">100+</span>
+        </div>
+        <div class="colorbar-cat-labels">
+          <span style="left: 15%;">Light</span>
+          <span style="left: 42%;">Breeze</span>
+          <span style="left: 65%;">Moderate</span>
+          <span style="left: 82%;">Strong</span>
+          <span style="left: 95%;">Storm</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 4. Inter-Model Disagreement Color Bar
+  if (layer === "disagreement") {
+    container.innerHTML = `
+      <div class="met-colorbar-card">
+        <div class="colorbar-head">
+          <div class="colorbar-title-row">
+            <span class="colorbar-dot" style="background: #f59e0b; box-shadow: 0 0 6px #f59e0b;"></span>
+            <span class="colorbar-title">Model Disagreement D</span>
+          </div>
+          <span class="colorbar-unit">${varUnit}</span>
+        </div>
+        <div class="colorbar-ramp-container">
+          <div class="colorbar-ramp-gradient" style="background: linear-gradient(to right, #a5b4fc 0%, #3b82f6 20%, #f59e0b 45%, #ea580c 70%, #dc2626 100%);"></div>
+          <div class="colorbar-tick-marks">
+            <span class="c-tick" style="left: 0%;"></span>
+            <span class="c-tick" style="left: 20%;"></span>
+            <span class="c-tick" style="left: 45%;"></span>
+            <span class="c-tick" style="left: 70%;"></span>
+            <span class="c-tick" style="left: 100%;"></span>
+          </div>
+        </div>
+        <div class="colorbar-tick-labels">
+          <span style="left: 0%;">0</span>
+          <span style="left: 20%;">0.11</span>
+          <span style="left: 45%;">2.06</span>
+          <span style="left: 70%;">5.0</span>
+          <span style="left: 100%;">10+</span>
+        </div>
+        <div class="colorbar-cat-labels">
+          <span style="left: 10%;">High Conf</span>
+          <span style="left: 32%;">Moderate</span>
+          <span style="left: 58%;">Low Confidence</span>
+          <span style="left: 85%;">Severe Spread</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 5. Simplex Weights Color Bar
+  if (layer === "w_gfs" || layer === "w_ecmwf") {
+    const isGfs = layer === "w_gfs";
+    container.innerHTML = `
+      <div class="met-colorbar-card">
+        <div class="colorbar-head">
+          <div class="colorbar-title-row">
+            <span class="colorbar-dot" style="background: #0284c7; box-shadow: 0 0 6px #0284c7;"></span>
+            <span class="colorbar-title">${isGfs ? 'GFS Simplex Weight (w_GFS)' : 'ECMWF Simplex Weight (w_EC)'}</span>
+          </div>
+          <span class="colorbar-unit">Weight [0, 1]</span>
+        </div>
+        <div class="colorbar-ramp-container">
+          <div class="colorbar-ramp-gradient" style="background: linear-gradient(to right, #0c4a6e 0%, #0284c7 35%, #64748b 50%, #f59e0b 65%, #ea580c 80%, #c2410c 100%);"></div>
+          <div class="colorbar-tick-marks">
+            <span class="c-tick" style="left: 0%;"></span>
+            <span class="c-tick" style="left: 35%;"></span>
+            <span class="c-tick" style="left: 50%;"></span>
+            <span class="c-tick" style="left: 65%;"></span>
+            <span class="c-tick" style="left: 100%;"></span>
+          </div>
+        </div>
+        <div class="colorbar-tick-labels">
+          <span style="left: 0%;">0.0</span>
+          <span style="left: 35%;">0.45</span>
+          <span style="left: 50%;">0.50</span>
+          <span style="left: 65%;">0.55</span>
+          <span style="left: 100%;">1.0</span>
+        </div>
+        <div class="colorbar-cat-labels">
+          <span style="left: 17%;">Subordinate</span>
+          <span style="left: 50%;">Consensus</span>
+          <span style="left: 82%;">Dominant</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 6. Empirical Confidence Categories
+  if (layer === "confidence") {
+    container.innerHTML = `
+      <div class="met-colorbar-card">
+        <div class="colorbar-head">
+          <div class="colorbar-title-row">
+            <span class="colorbar-dot" style="background: #10b981; box-shadow: 0 0 6px #10b981;"></span>
+            <span class="colorbar-title">Confidence Regimes</span>
+          </div>
+          <span class="colorbar-unit">Spread Calibration</span>
+        </div>
+        <div class="colorbar-ramp-container" style="display: flex; gap: 2px; height: 10px;">
+          <div style="flex: 1; background: #10b981; border-radius: 2px;"></div>
+          <div style="flex: 1; background: #f59e0b; border-radius: 2px;"></div>
+          <div style="flex: 1; background: #dc2626; border-radius: 2px;"></div>
+        </div>
+        <div class="colorbar-cat-labels" style="display: flex; justify-content: space-between; margin-top: 3px;">
+          <span style="position: static; transform: none; color: #34d399;">High (D &lt; 0.11)</span>
+          <span style="position: static; transform: none; color: #fbbf24;">Moderate (0.11–2.06)</span>
+          <span style="position: static; transform: none; color: #f87171;">Low (D &ge; 2.06)</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Fallback for categorical / other layers
+  let title = "METEOROLOGICAL ANALYSIS";
   let items = [];
-
-  const varPal = state.activeVariable === "temperature" ? PALETTES.temperature : state.activeVariable === "wind" ? PALETTES.wind : PALETTES.rain;
-
-  if (layer === "blended") {
-    title = `CONTEXT-AWARE BLEND (${varUnit})`;
-    items = varPal;
-  } else if (layer === "fused") {
-    title = `50/50 EQUAL-WEIGHT BASELINE (${varUnit})`;
-    items = varPal;
-  } else if (layer === "gfs") {
-    title = `NOAA GFS Forecast (${varUnit})`;
-    items = varPal;
-  } else if (layer === "ecmwf") {
-    title = `ECMWF IFS Forecast (${varUnit})`;
-    items = varPal;
-  } else if (layer === "w_gfs") {
-    title = "GFS SIMPLEX WEIGHT (w_GFS)";
-    items = PALETTES.weights;
-  } else if (layer === "w_ecmwf") {
-    title = "ECMWF SIMPLEX WEIGHT (w_ECMWF)";
-    items = PALETTES.weights;
-  } else if (layer === "dominant_model") {
+  if (layer === "dominant_model") {
     title = "DOMINANT NWP MODEL";
     items = [
       { color: "#0284c7", label: "NOAA GFS Dominant (w > 0.55)" },
@@ -1838,7 +2375,7 @@ function updateLegend() {
     title = "SHANNON WEIGHT ENTROPY H(s) (nats)";
     items = PALETTES.entropy;
   } else if (layer === "extreme_guidance") {
-    title = "EXTREME WEATHER GUIDANCE (Deterministic)";
+    title = "EXTREME WEATHER GUIDANCE";
     items = [
       { color: "#7e22ce", label: "Extreme Warning (Severe Exceedance)" },
       { color: "#dc2626", label: "Warning (High Severity)" },
@@ -1846,15 +2383,6 @@ function updateLegend() {
       { color: "#f59e0b", label: "Watch (Light / Marginal)" },
       { color: "rgba(16, 185, 129, 0.4)", label: "Below Warning Threshold (Normal)" }
     ];
-  } else if (layer === "imd") {
-    title = `IMD Retrospective Observation (${varUnit})`;
-    items = varPal;
-  } else if (layer === "confidence") {
-    title = "EMPIRICAL CONFIDENCE REGIMES";
-    items = PALETTES.confidence.map((c) => ({ color: c.color, label: c.label }));
-  } else if (layer === "disagreement") {
-    title = `MODEL DISAGREEMENT D = |GFS − ECMWF| (${varUnit})`;
-    items = PALETTES.disagreement;
   }
 
   let html = `<div class="legend-title">${title}</div><div class="legend-items">`;
@@ -1871,7 +2399,7 @@ function updateLegend() {
 }
 
 /* ========================================================
-   CELL INSPECTION & PROGRESSIVE DISCLOSURE
+   CELL INSPECTION & GEOGRAPHIC LOCATION SELECTION
    ======================================================== */
 function inspectCell(pt) {
   state.selectedPoint = pt;
@@ -1886,25 +2414,70 @@ function inspectCell(pt) {
     state.threeViewer.highlightCell(pt);
   }
 
-  // Draw Reticle / Highlight Box on Map
+  // Clear prior selection layer
   if (state.selectedCellHighlight) {
     state.map.removeLayer(state.selectedCellHighlight);
   }
 
+  // Precision Meteorological Station Reticle (Geographic point on weather map)
+  const highlightGroup = L.layerGroup();
+
+  // 1. Subtle 0.25° representative cell footprint (hairline dashed bracket, no heavy fill)
   const half = 0.125;
   const b = [
     [pt.lat - half, pt.lon - half],
     [pt.lat + half, pt.lon + half]
   ];
+  const cellFootprint = L.rectangle(b, {
+    color: "#0284c7",
+    weight: 1.0,
+    dashArray: "3, 3",
+    fillColor: "#38bdf8",
+    fillOpacity: 0.08,
+    interactive: false,
+    zIndex: 590,
+  });
+  highlightGroup.addLayer(cellFootprint);
 
-  state.selectedCellHighlight = L.rectangle(b, {
-    color: "#38bdf8",
-    weight: 2.5,
-    fillColor: "#0284c7",
+  // 2. Precision Station Reticle Ring
+  const targetRing = L.circleMarker([pt.lat, pt.lon], {
+    radius: 8,
+    weight: 2,
+    color: "#0284c7",
+    fillColor: "#38bdf8",
     fillOpacity: 0.25,
     interactive: false,
     zIndex: 600,
-  }).addTo(state.map);
+  });
+  highlightGroup.addLayer(targetRing);
+
+  // 3. Central Pinpoint Station Core
+  const pinpointCore = L.circleMarker([pt.lat, pt.lon], {
+    radius: 2.5,
+    weight: 1.5,
+    color: "#0369a1",
+    fillColor: "#ffffff",
+    fillOpacity: 1.0,
+    interactive: false,
+    zIndex: 601,
+  });
+  highlightGroup.addLayer(pinpointCore);
+
+  // 4. Subtle Crosshair Ticks (N, S, E, W)
+  const chDelta = 0.035;
+  const chNS = L.polyline([
+    [pt.lat - chDelta, pt.lon],
+    [pt.lat + chDelta, pt.lon]
+  ], { color: "#0284c7", weight: 1.2, interactive: false, zIndex: 600 });
+  const chEW = L.polyline([
+    [pt.lat, pt.lon - chDelta],
+    [pt.lat, pt.lon + chDelta]
+  ], { color: "#0284c7", weight: 1.2, interactive: false, zIndex: 600 });
+  highlightGroup.addLayer(chNS);
+  highlightGroup.addLayer(chEW);
+
+  highlightGroup.addTo(state.map);
+  state.selectedCellHighlight = highlightGroup;
 
   // Switch panels
   document.getElementById("panel-domain-summary").classList.add("hidden");
@@ -1916,24 +2489,26 @@ function inspectCell(pt) {
   document.getElementById("inspect-subregion").textContent = `${pt.subregion.toUpperCase()} • ${stateName.toUpperCase()}`;
   document.getElementById("inspect-coords").textContent = `${pt.lat.toFixed(2)}°N · ${pt.lon.toFixed(2)}°E`;
 
+  const leadTag = `+${state.activeLead || 24}h Lead`;
   if (state.operationalMode === "live") {
     const initDate = state.currentGridData ? new Date(state.currentGridData.initialization_time_utc) : new Date();
     const validDate = state.currentGridData ? new Date(state.currentGridData.valid_time_utc) : new Date();
     const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
     const initFmt = `${String(initDate.getUTCDate()).padStart(2, "0")} ${months[initDate.getUTCMonth()]} ${initDate.getUTCFullYear()} 00 UTC`;
     const validFmt = `${String(validDate.getUTCDate()).padStart(2, "0")} ${months[validDate.getUTCMonth()]} ${validDate.getUTCFullYear()} 00 UTC`;
-    document.getElementById("inspect-dates").textContent = `Initialization: ${initFmt} → Valid: ${validFmt} (+24h Lead)`;
+    document.getElementById("inspect-dates").textContent = `Initialization: ${initFmt} → Valid: ${validFmt} (${leadTag})`;
   } else {
-    document.getElementById("inspect-dates").textContent = `Forecast: ${state.currentDate} (00 UTC Cycle, +24h Lead)`;
+    document.getElementById("inspect-dates").textContent = `Forecast: ${state.currentDate} (00 UTC Cycle, ${leadTag})`;
   }
 
   // Dynamic Variable Kicker & Unit
   const varUnit = pt.unit || (state.activeVariable === "temperature" ? "°C" : state.activeVariable === "wind" ? "km/h" : "mm");
+  const leadStr = `+${state.activeLead || 24}H`;
   const kickerElText = state.activeVariable === "temperature"
-    ? "24-HOUR DYNAMICALLY BLENDED 2M TEMPERATURE"
+    ? `${leadStr} DYNAMICALLY BLENDED 2M TEMPERATURE`
     : state.activeVariable === "wind"
-    ? "24-HOUR DYNAMICALLY BLENDED 10M WIND SPEED"
-    : "24-HOUR DYNAMICALLY BLENDED PRECIPITATION";
+    ? `${leadStr} DYNAMICALLY BLENDED 10M WIND SPEED`
+    : `${leadStr} DYNAMICALLY BLENDED PRECIPITATION`;
   const varKickerEl = document.getElementById("inspect-var-kicker");
   if (varKickerEl) varKickerEl.textContent = kickerElText;
   const varUnitEl = document.getElementById("inspect-var-unit");
@@ -2095,7 +2670,7 @@ function inspectCell(pt) {
   const cardFused = document.getElementById("card-fused-val");
   if (cardFused) cardFused.textContent = `${Number(valHero).toFixed(2)} ${varUnit}`;
   const cardDis = document.getElementById("card-dis-val");
-  if (cardDis) cardDis.textContent = `${disVal.toFixed(2)} ${varUnit}`;
+  if (cardDis) cardDis.textContent = disVal.toFixed(2);
 
   // Retrospective IMD Verification Audit / Live Pending Notice
   const pendingBox = document.getElementById("inspect-live-pending-box");
@@ -2134,44 +2709,56 @@ function inspectCell(pt) {
     if (verifNote) verifNote.style.display = "block";
 
     if (pt.imd_mm !== null && pt.imd_mm !== undefined) {
-      document.getElementById("inspect-imd-val").textContent = `${pt.imd_mm.toFixed(2)} mm`;
+      const imdValEl = document.getElementById("inspect-imd-val");
+      if (imdValEl) imdValEl.textContent = `${pt.imd_mm.toFixed(2)} mm`;
       const fusedValElem = document.getElementById("inspect-fused-compare-val");
-      if (fusedValElem) fusedValElem.textContent = `${pt.fused_mm.toFixed(2)} mm`;
+      if (fusedValElem) fusedValElem.textContent = `${(pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm).toFixed(2)} mm`;
 
-      const err = pt.fused_error_mm;
-      document.getElementById("inspect-imd-err").textContent = `${err >= 0 ? "+" : ""}${err.toFixed(2)} mm`;
+      const err = pt.fused_error_mm !== undefined ? pt.fused_error_mm : 0.0;
+      const imdErrEl = document.getElementById("inspect-imd-err");
+      if (imdErrEl) imdErrEl.textContent = `${err >= 0 ? "+" : ""}${err.toFixed(2)} mm`;
 
-      statusBadge.className = "audit-verification-status";
-      const statusText = document.getElementById("inspect-verif-status-text");
-      if (err >= 0) {
-        statusBadge.classList.add("status-over");
-        if (statusText) statusText.textContent = `OVER-FORECAST (+${err.toFixed(2)} mm)`;
-      } else {
-        statusBadge.classList.add("status-under");
-        if (statusText) statusText.textContent = `UNDER-FORECAST (${err.toFixed(2)} mm)`;
+      if (statusBadge) {
+        statusBadge.className = "audit-verification-status";
+        const statusText = document.getElementById("inspect-verif-status-text");
+        if (err >= 0) {
+          statusBadge.classList.add("status-over");
+          if (statusText) statusText.textContent = `OVER-FORECAST (+${err.toFixed(2)} mm)`;
+        } else {
+          statusBadge.classList.add("status-under");
+          if (statusText) statusText.textContent = `UNDER-FORECAST (${err.toFixed(2)} mm)`;
+        }
       }
     } else {
-      document.getElementById("inspect-imd-val").textContent = "Pending Observation";
+      const imdValEl = document.getElementById("inspect-imd-val");
+      if (imdValEl) imdValEl.textContent = state.operationalMode === "live" ? "Pending Observation" : "No Observation";
       const fusedValElem = document.getElementById("inspect-fused-compare-val");
-      if (fusedValElem) fusedValElem.textContent = `${pt.fused_mm.toFixed(2)} mm`;
-      document.getElementById("inspect-imd-err").textContent = "--";
-      statusBadge.className = "audit-verification-status status-pending";
-      const statusText = document.getElementById("inspect-verif-status-text");
-      if (statusText) statusText.textContent = "Causal T-1 Ingestion Pending";
+      if (fusedValElem) fusedValElem.textContent = `${(pt.blend_val !== undefined ? pt.blend_val : pt.fused_mm).toFixed(2)} mm`;
+      const imdErrEl = document.getElementById("inspect-imd-err");
+      if (imdErrEl) imdErrEl.textContent = "--";
+      if (statusBadge) {
+        statusBadge.className = "audit-verification-status status-pending";
+        const statusText = document.getElementById("inspect-verif-status-text");
+        if (statusText) statusText.textContent = "Causal T-1 Ingestion Pending";
+      }
     }
   }
 
-  // Technical Metadata
-  document.getElementById("tech-cell-coords").textContent = `${pt.lat.toFixed(2)}°N, ${pt.lon.toFixed(2)}°E`;
-  document.getElementById("tech-subregion").textContent = pt.subregion;
-  document.getElementById("tech-dis-raw").textContent = `${pt.disagreement_mm.toFixed(2)} mm`;
-  document.getElementById("tech-dis-norm").textContent = pt.disagreement_norm ? pt.disagreement_norm.toFixed(3) : "--";
-  document.getElementById("tech-threshold-rule").textContent = pt.confidence_class === "High Confidence"
-    ? "D < 0.11 mm -> High Confidence"
+  // Technical Metadata (safe setters)
+  const setElText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+  setElText("tech-cell-coords", `${pt.lat.toFixed(2)}°N, ${pt.lon.toFixed(2)}°E`);
+  setElText("tech-subregion", pt.subregion);
+  setElText("tech-dis-raw", `${(pt.disagreement_mm !== undefined ? pt.disagreement_mm : (pt.disagreement || 0)).toFixed(2)} ${varUnit}`);
+  setElText("tech-dis-norm", pt.disagreement_norm ? pt.disagreement_norm.toFixed(3) : "--");
+  setElText("tech-threshold-rule", pt.confidence_class === "High Confidence"
+    ? `D < 0.11 ${varUnit} -> High Confidence`
     : pt.confidence_class === "Moderate Confidence"
-    ? "0.11 <= D < 2.06 mm -> Moderate"
-    : "D >= 2.06 mm -> Low Confidence";
-  document.getElementById("tech-regime").textContent = pt.predicted_regime || "Moderate";
+    ? `0.11 <= D < 2.06 ${varUnit} -> Moderate`
+    : `D >= 2.06 ${varUnit} -> Low Confidence`);
+  setElText("tech-regime", pt.predicted_regime || "Moderate");
 }
 
 function clearSelection() {
@@ -2362,7 +2949,7 @@ const DEMO_STEPS = [
   {
     step: 1,
     title: "1. Operational Problem & Domain Overview",
-    desc: "Welcome to SIH26081. We solve the critical challenge of high-impact monsoon rainfall forecasting by fusing independent NWP models (NOAA GFS & ECMWF IFS) and providing explainable confidence based on physical model disagreement.",
+    desc: "Welcome to AETHERA. We solve the critical challenge of high-impact monsoon rainfall forecasting by fusing independent NWP models (NOAA GFS & ECMWF IFS) and providing explainable confidence based on physical model disagreement.",
     preview: "Domain: Andhra Pradesh & Telangana • 791 Terrestrial 0.25° Cells • June–August 2024 (92 Continuous Monsoon Days)."
   },
   {
