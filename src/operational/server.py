@@ -372,23 +372,36 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
 
 
         # 6. Static File Serving (Frontend Dashboard)
-        static_dir = os.path.join(project_root, "frontend")
+        static_dir = os.path.abspath(os.path.join(project_root, "frontend"))
         rel_path = path.lstrip("/")
         if not rel_path or rel_path == "index.html":
             file_to_serve = os.path.join(static_dir, "index.html")
             content_type = "text/html; charset=utf-8"
-        elif rel_path.endswith(".css"):
-            file_to_serve = os.path.join(static_dir, rel_path)
-            content_type = "text/css; charset=utf-8"
-        elif rel_path.endswith(".js"):
-            file_to_serve = os.path.join(static_dir, rel_path)
-            content_type = "application/javascript; charset=utf-8"
-        elif rel_path.endswith(".json") or rel_path.endswith(".geojson"):
-            file_to_serve = os.path.join(static_dir, rel_path)
-            content_type = "application/json; charset=utf-8"
         else:
-            file_to_serve = os.path.join(static_dir, rel_path)
-            content_type = "application/octet-stream"
+            file_to_serve = os.path.abspath(os.path.join(static_dir, rel_path))
+            # Security: ensure file_to_serve stays within static_dir
+            if not file_to_serve.startswith(static_dir):
+                self._send_json(403, {"status": "FORBIDDEN", "error": "Access denied."})
+                return
+
+            if rel_path.endswith(".css"):
+                content_type = "text/css; charset=utf-8"
+            elif rel_path.endswith(".js"):
+                content_type = "application/javascript; charset=utf-8"
+            elif rel_path.endswith(".json") or rel_path.endswith(".geojson") or rel_path.endswith(".map"):
+                content_type = "application/json; charset=utf-8"
+            elif rel_path.endswith(".svg"):
+                content_type = "image/svg+xml"
+            elif rel_path.endswith(".png"):
+                content_type = "image/png"
+            elif rel_path.endswith(".ico"):
+                content_type = "image/x-icon"
+            elif rel_path.endswith(".woff2"):
+                content_type = "font/woff2"
+            elif rel_path.endswith(".woff"):
+                content_type = "font/woff"
+            else:
+                content_type = "application/octet-stream"
 
         if os.path.exists(file_to_serve) and os.path.isfile(file_to_serve):
             try:
@@ -413,11 +426,21 @@ class RobustThreadingHTTPServer(ThreadingHTTPServer):
             return
         super().handle_error(request, client_address)
 
-def run_server(port: int = 8080):
-    server_address = ("127.0.0.1", port)
+def run_server(host: Optional[str] = None, port: Optional[int] = None):
+    # Support run_server(8080) if positional int is provided as first argument
+    if isinstance(host, int):
+        port = host
+        host = None
+    if host is None:
+        host = os.environ.get("HOST", "0.0.0.0")
+    if port is None:
+        port = int(os.environ.get("PORT", "8080"))
+
+    server_address = (host, port)
     httpd = RobustThreadingHTTPServer(server_address, OperationalAPIHandler)
-    logger.info(f"Operational Prototype Server running at http://127.0.0.1:{port}/")
-    print(f"Operational Prototype Server running at http://127.0.0.1:{port}/")
+    display_host = "127.0.0.1" if host == "0.0.0.0" else host
+    logger.info(f"Operational Server running at http://{display_host}:{port}/ (bound to {host}:{port})")
+    print(f"Operational Server running at http://{display_host}:{port}/ (bound to {host}:{port})")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -425,5 +448,7 @@ def run_server(port: int = 8080):
         httpd.server_close()
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
-    run_server(port)
+    cli_port = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    port = cli_port if cli_port is not None else int(os.environ.get("PORT", "8080"))
+    host = os.environ.get("HOST", "0.0.0.0")
+    run_server(host=host, port=port)
