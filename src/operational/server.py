@@ -11,6 +11,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import json
+import gzip
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
@@ -37,13 +38,20 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Accept-Encoding")
 
     def _send_json(self, status_code: int, data: Any):
         try:
-            body = json.dumps(data, indent=2).encode("utf-8")
+            body = json.dumps(data, separators=(",", ":")).encode("utf-8")
+            accept_encoding = self.headers.get("Accept-Encoding", "") if hasattr(self, "headers") else ""
+            use_gzip = "gzip" in accept_encoding and len(body) > 1024
+            if use_gzip:
+                body = gzip.compress(body, compresslevel=6)
+
             self.send_response(status_code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
+            if use_gzip:
+                self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))
             self._send_cors_headers()
             self.end_headers()
@@ -407,8 +415,16 @@ class OperationalAPIHandler(BaseHTTPRequestHandler):
             try:
                 with open(file_to_serve, "rb") as f:
                     content = f.read()
+
+                accept_encoding = self.headers.get("Accept-Encoding", "") if hasattr(self, "headers") else ""
+                use_gzip = "gzip" in accept_encoding and len(content) > 1024 and not rel_path.endswith((".png", ".jpg", ".jpeg", ".ico"))
+                if use_gzip:
+                    content = gzip.compress(content, compresslevel=6)
+
                 self.send_response(200)
                 self.send_header("Content-Type", content_type)
+                if use_gzip:
+                    self.send_header("Content-Encoding", "gzip")
                 self.send_header("Content-Length", str(len(content)))
                 self._send_cors_headers()
                 self.end_headers()

@@ -682,13 +682,17 @@ function setupEventListeners() {
 
   // Timeline Slider
   const slider = document.getElementById("timeline-slider");
+  let sliderDebounceTimer = null;
   slider.addEventListener("input", (e) => {
     const idx = parseInt(e.target.value, 10);
     if (state.allDates[idx]) {
       state.currentDate = state.allDates[idx].date;
       datePicker.value = state.currentDate;
       updateDateDisplay();
-      loadForecastForDate(state.currentDate);
+      clearTimeout(sliderDebounceTimer);
+      sliderDebounceTimer = setTimeout(() => {
+        loadForecastForDate(state.currentDate);
+      }, 150);
     }
   });
 
@@ -966,13 +970,36 @@ function updateDateDisplay() {
   }
 }
 
+let forecastAbortController = null;
+let currentForecastRequestId = 0;
+
 async function loadForecastForDate(dateStr) {
+  const reqId = ++currentForecastRequestId;
+  if (forecastAbortController) {
+    try { forecastAbortController.abort(); } catch (_) {}
+  }
+  forecastAbortController = new AbortController();
+  const signal = forecastAbortController.signal;
+
   try {
     const varParam = state.activeVariable || "precipitation";
     const leadParam = state.activeLead || 24;
-    const res = await fetch(`/api/v2/forecast?date=${dateStr}&variable=${varParam}&lead=${leadParam}`);
+    const res = await fetch(`/api/v2/forecast?date=${dateStr}&variable=${varParam}&lead=${leadParam}`, { signal });
+
+    if (!res.ok) {
+      if (reqId !== currentForecastRequestId) return;
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.error || errJson.reason || errMsg;
+      } catch (_) {}
+      showErrorModal("SERVICE BUSY", "The forecasting backend is momentarily busy.", `${errMsg}. Please try again in a moment.`);
+      return;
+    }
+
     const data = await res.json();
-    
+    if (reqId !== currentForecastRequestId) return;
+
     if (data.status === "SUCCESS") {
       // Normalise point attributes for complete multi-variable and backwards compatibility
       data.points.forEach((pt) => {
@@ -992,7 +1019,7 @@ async function loadForecastForDate(dateStr) {
       updateDomainStats(data);
       renderGrid();
       updateLegend();
-      
+
       // Update 3D viewer if present
       if (state.threeViewer && state.viewDimension === "3d") {
         state.threeViewer.renderData(
@@ -1019,19 +1046,44 @@ async function loadForecastForDate(dateStr) {
       showErrorModal("FORECAST UNAVAILABLE", data.error || `No forecast found for ${dateStr}.`, "Explicit system status returned. No missing data has been silently fabricated.");
     }
   } catch (err) {
+    if (err.name === "AbortError") return;
+    if (reqId !== currentForecastRequestId) return;
     console.error("Failed to fetch forecast grid:", err);
-    showErrorModal("NETWORK ERROR", "Unable to communicate with the operational forecast backend.", "Check if operational server is active on port 8080.");
+    showErrorModal("NETWORK ERROR", "Unable to communicate with the operational forecast backend.", "Please check your network connection or try reloading the forecast.");
   }
 }
 
 /* ========================================================
    LIVE 24-HOUR NWP FORECAST FETCH & MODE CONTROL
    ======================================================== */
+let liveAbortController = null;
+let currentLiveRequestId = 0;
+
 async function loadLiveForecast(forceRefresh = false) {
+  const reqId = ++currentLiveRequestId;
+  if (liveAbortController) {
+    try { liveAbortController.abort(); } catch (_) {}
+  }
+  liveAbortController = new AbortController();
+  const signal = liveAbortController.signal;
+
   try {
     const url = `/api/live${forceRefresh ? '?refresh=true' : ''}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal });
+
+    if (!res.ok) {
+      if (reqId !== currentLiveRequestId) return;
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.error || errJson.reason || errMsg;
+      } catch (_) {}
+      showErrorModal("SERVICE BUSY", "The live forecasting engine is momentarily busy.", `${errMsg}. Please try again in a moment.`);
+      return;
+    }
+
     const data = await res.json();
+    if (reqId !== currentLiveRequestId) return;
 
     if (data.status === "SUCCESS") {
       // Normalise points with simplex weights and extreme guidance defaults
@@ -1128,11 +1180,13 @@ async function loadLiveForecast(forceRefresh = false) {
       );
     }
   } catch (err) {
+    if (err.name === "AbortError") return;
+    if (reqId !== currentLiveRequestId) return;
     console.error("Failed to fetch live forecast:", err);
     showErrorModal(
       "NETWORK ERROR",
       "Unable to communicate with the live forecasting engine.",
-      "Check if operational server is active on port 8080."
+      "Please check your network connection or try reloading the forecast."
     );
   }
 }
